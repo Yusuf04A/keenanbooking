@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Calendar, Users, MapPin, Search } from 'lucide-react';
@@ -13,6 +14,7 @@ interface Property {
 const BookingSearch = () => {
     const [properties, setProperties] = useState<Property[]>([]);
     const [loading, setLoading] = useState(true);
+    const navigate = useNavigate();
 
     // State Form Pencarian
     const [searchParams, setSearchParams] = useState({
@@ -135,7 +137,10 @@ const BookingSearch = () => {
                                     <h3 className="text-xl font-bold mb-2">{prop.name}</h3>
                                     <p className="text-gray-500 text-sm mb-4 line-clamp-2">{prop.description || "Nikmati kenyamanan menginap terbaik bersama Keenan Living."}</p>
 
-                                    <button className="w-full border border-keenan-dark text-keenan-dark hover:bg-keenan-dark hover:text-white py-3 px-4 rounded transition-all text-sm uppercase font-bold tracking-widest">
+                                    <button
+                                        onClick={() => navigate(`/property/${prop.id}?checkIn=${searchParams.checkIn}&checkOut=${searchParams.checkOut}&guests=${searchParams.guests}`)}
+                                        className="w-full border border-keenan-dark text-keenan-dark hover:bg-keenan-dark hover:text-white py-3 px-4 rounded transition-all text-sm uppercase font-bold tracking-widest"
+                                    >
                                         View Rooms
                                     </button>
                                 </div>

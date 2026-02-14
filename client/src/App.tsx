@@ -1,23 +1,23 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import BookingSearch from './pages/booking/BookingSearch';
+import PropertyDetails from './pages/booking/PropertyDetails'; // <--- Import baru
 import AdminLogin from './pages/admin/Login';
 import AdminDashboard from './pages/admin/Dashboard';
 
-// Placeholder Component kalau file belum dibuat
 const NotFound = () => <div className="p-10 text-center">404 - Halaman Tidak Ditemukan</div>;
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* === PUBLIC ROUTES (CUSTOMER) === */}
+        {/* PUBLIC */}
         <Route path="/" element={<BookingSearch />} />
+        <Route path="/property/:id" element={<PropertyDetails />} /> {/* <--- Route Baru */}
 
-        {/* === PRIVATE ROUTES (ADMIN) === */}
+        {/* ADMIN */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
-
-        {/* Fallback */}
+        
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
