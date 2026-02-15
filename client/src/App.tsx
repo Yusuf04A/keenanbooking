@@ -7,6 +7,7 @@ import AdminDashboard from './pages/admin/Dashboard';
 import CalendarPage from './pages/admin/CalenderPage';
 import InvoicePage from './pages/admin/Invoice';
 import SuperAdminDashboard from './pages/admin/SuperAdminDashboard';
+import SuccessPage from './pages/booking/SuccessPage';
 
 const NotFound = () => <div className="p-10 text-center">404 - Halaman Tidak Ditemukan</div>;
 
@@ -64,6 +65,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route path="/success" element={<SuccessPage />} />
 
         {/* 404 Not Found */}
         <Route path="*" element={<NotFound />} />

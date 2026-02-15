@@ -1,9 +1,10 @@
+import { sendWhatsAppInvoice } from '../../lib/fonnte';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import {
-    Loader2, Calendar, User, Info, AlertCircle, CheckCircle,
-    ShieldCheck, Wifi, Wind, Coffee, MessageSquare, Star,
+    Loader2, Calendar, User, AlertCircle, CheckCircle,
+    Wifi, Wind, Coffee, MessageSquare, Star,
     Printer, Home, Check
 } from 'lucide-react';
 
@@ -11,147 +12,194 @@ export default function BookingPage() {
     const location = useLocation();
     const navigate = useNavigate();
 
-    const { room, propertyName, preSelectedCheckIn, preSelectedCheckOut } = location.state || {};
+    // 1. Ambil data dari navigasi sebelumnya
+    const state = location.state || {};
+    const { room, preSelectedCheckIn, preSelectedCheckOut } = state;
+    const propertyName = state.propertyName || "Keenan Living Hotel";
 
-    const [loading, setLoading] = useState(false);
-    const [isChecking, setIsChecking] = useState(false);
-    const [availabilityStatus, setAvailabilityStatus] = useState<'idle' | 'available' | 'unavailable'>('idle');
-
-    // STATE BARU: Untuk menyimpan data sukses (Step 3)
-    const [successData, setSuccessData] = useState<any>(null);
-
-    const [formData, setFormData] = useState({
-        name: '', email: '', phone: '',
-        checkIn: preSelectedCheckIn || '',
-        checkOut: preSelectedCheckOut || '',
-        notes: ''
-    });
-
+    // Proteksi jika data hilang (misal refresh)
     useEffect(() => {
         if (!room) {
-            alert("Silakan pilih kamar terlebih dahulu.");
+            alert("Data booking hilang karena refresh. Silakan pilih kamar ulang.");
             navigate('/');
-        }
-        if (formData.checkIn && formData.checkOut) {
-            checkAvailability(formData.checkIn, formData.checkOut);
         }
     }, [room, navigate]);
 
-    const handleDateChange = (field: string, value: string) => {
-        const newData = { ...formData, [field]: value };
-        setFormData(newData);
-        if (newData.checkIn && newData.checkOut) {
-            checkAvailability(newData.checkIn, newData.checkOut);
+    // 2. State Management
+    const [loading, setLoading] = useState(false);
+    const [isChecking, setIsChecking] = useState(false);
+    const [availabilityStatus, setAvailabilityStatus] = useState<'idle' | 'available' | 'unavailable'>('idle');
+    const [successData, setSuccessData] = useState<any>(null); // Untuk tampilan sukses
+
+    const [formData, setFormData] = useState({
+        name: '', email: '', phone: '',
+        checkIn: preSelectedCheckIn || new Date().toISOString().split('T')[0],
+        checkOut: preSelectedCheckOut || new Date(Date.now() + 86400000).toISOString().split('T')[0],
+        notes: ''
+    });
+
+    // 3. Cek Ketersediaan Awal & Saat Tanggal Berubah
+    useEffect(() => {
+        if (room && formData.checkIn && formData.checkOut) {
+            checkAvailability(formData.checkIn, formData.checkOut);
         }
+    }, [formData.checkIn, formData.checkOut, room]);
+
+    const handleDateChange = (field: string, value: string) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
+        // useEffect di atas akan otomatis menjalankan checkAvailability
     };
 
     const checkAvailability = async (inDate: string, outDate: string) => {
+        if (!room) return;
         setIsChecking(true);
         setAvailabilityStatus('idle');
 
         try {
-            // 1. Ambil Info Stok Kamar ini dulu
+            // Ambil Stok Master
             const { data: roomData } = await supabase
                 .from('room_types')
                 .select('total_stock')
                 .eq('id', room.id)
                 .single();
 
-            const maxStock = roomData?.total_stock || 1; // Default 1 kalau error
+            const maxStock = roomData?.total_stock || 1;
 
-            // 2. Hitung berapa orang yang SUDAH booking di tanggal yang bertabrakan
+            // Hitung Booking yang bertabrakan (Overlap)
             const { count, error } = await supabase
                 .from('bookings')
-                .select('id', { count: 'exact', head: true }) // Cuma butuh jumlahnya (count)
+                .select('id', { count: 'exact', head: true })
                 .eq('room_type_id', room.id)
-                .neq('status', 'cancelled') // Yang cancel gak dihitung
-                // Rumus Tabrakan Tanggal (Overlap Logic)
+                .neq('status', 'cancelled')
                 .or(`and(check_in_date.lt.${outDate},check_out_date.gt.${inDate})`);
 
             if (error) throw error;
 
             const bookedCount = count || 0;
-
             console.log(`Stok: ${maxStock}, Terpakai: ${bookedCount}`);
 
-            // 3. Bandingkan
             if (bookedCount >= maxStock) {
-                setAvailabilityStatus('unavailable'); // Yah, penuh :(
+                setAvailabilityStatus('unavailable');
             } else {
-                setAvailabilityStatus('available'); // Masih ada sisa! :)
+                setAvailabilityStatus('available');
             }
 
         } catch (err) {
             console.error("Cek ketersediaan error:", err);
-            alert("Gagal mengecek ketersediaan kamar.");
         } finally {
             setIsChecking(false);
         }
     };
 
+    // 4. Hitung Total Harga Secara Real-time
     const calculateTotal = () => {
         if (!formData.checkIn || !formData.checkOut) return 0;
         const start = new Date(formData.checkIn);
         const end = new Date(formData.checkOut);
-        const nights = (end.getTime() - start.getTime()) / (1000 * 3600 * 24);
-        return nights > 0 ? nights * room.base_price : 0;
+        const diffTime = end.getTime() - start.getTime();
+        const nights = Math.ceil(diffTime / (1000 * 3600 * 24));
+
+        // Minimal 1 malam, cegah minus
+        return nights > 0 ? nights * room.base_price : room.base_price;
     };
 
-    const handlePayment = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (availabilityStatus === 'unavailable') return alert("Kamar penuh!");
+    // 5. Proses Pembayaran
+    const handlePayment = async () => {
+        if (!formData.name || !formData.phone || !formData.email) {
+            return alert("Mohon lengkapi data diri Anda!");
+        }
+        if (availabilityStatus !== 'available') {
+            return alert("Maaf, kamar tidak tersedia di tanggal tersebut.");
+        }
 
         setLoading(true);
-        try {
-            const orderId = `KNA-${Date.now()}`;
-            const totalPrice = calculateTotal();
+        // Hitung total harga final berdasarkan inputan tanggal terkini
+        const finalTotalPrice = calculateTotal();
 
-            // 1. Request Token Midtrans
+        try {
+            // A. Generate Kode Booking
+            const bookingCode = `KNA-${Date.now()}`;
+
+            // B. Request Token ke Backend (Midtrans)
             const response = await fetch('http://localhost:5000/api/midtrans/create-transaction', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    orderId, amount: totalPrice,
-                    customerDetails: { first_name: formData.name, email: formData.email, phone: formData.phone }
+                    orderId: bookingCode,
+                    amount: finalTotalPrice, // Gunakan harga hasil kalkulasi terbaru
+                    customerDetails: {
+                        first_name: formData.name,
+                        email: formData.email,
+                        phone: formData.phone
+                    }
                 })
             });
-            const data = await response.json();
 
-            // 2. Simpan ke Database
-            const { data: bookingData, error } = await supabase.from('bookings').insert([{
-                booking_code: orderId,
-                property_id: room.property_id,
-                room_type_id: room.id,
-                customer_name: formData.name,
-                customer_email: formData.email,
-                customer_phone: formData.phone,
-                customer_notes: formData.notes,
-                check_in_date: formData.checkIn,
-                check_out_date: formData.checkOut,
-                total_price: totalPrice,
-                status: 'pending_payment',
-                booking_source: 'website'
-            }]).select().single();
+            const { token } = await response.json();
 
-            if (error) throw error;
+            // C. Munculkan Snap Midtrans
+            // @ts-ignore
+            window.snap.pay(token, {
+                onSuccess: async function (result: any) {
+                    console.log("Payment Success!", result);
+                    const midtransPdf = result.pdf_url || "";
 
-            // 3. Munculkan Snap Payment
-            (window as any).snap.pay(data.token, {
-                onSuccess: () => {
-                    // SUKSES: Jangan redirect, tapi set state successData
-                    setSuccessData(bookingData);
-                    window.scrollTo(0, 0); // Scroll ke atas biar kelihatan
+                    try {
+                        // D. Simpan ke Database
+                        const { data: bookingData, error } = await supabase
+                            .from('bookings')
+                            .insert([{
+                                property_id: room.property_id,
+                                room_type_id: room.id,
+                                booking_code: bookingCode,
+                                check_in_date: formData.checkIn,   // Gunakan tanggal dari Form
+                                check_out_date: formData.checkOut, // Gunakan tanggal dari Form
+                                total_price: finalTotalPrice,
+                                status: 'paid', // Atau 'confirmed'
+                                customer_name: formData.name,
+                                customer_email: formData.email,
+                                customer_phone: formData.phone,
+                                customer_notes: formData.notes, // Simpan Notes
+                                booking_source: 'Website',
+                                payment_method: result.payment_type
+                            }])
+                            .select()
+                            .single();
+
+                        if (error) throw error;
+
+                        // E. Kirim WhatsApp
+                        console.log("Sending WhatsApp...");
+                        await sendWhatsAppInvoice(
+                            formData.phone,
+                            formData.name,
+                            bookingCode,
+                            propertyName,
+                            room.name,
+                            formData.checkIn,  // Tanggal Form
+                            formData.checkOut, // Tanggal Form
+                            finalTotalPrice,
+                            midtransPdf
+                        );
+
+                        // F. Update State untuk Menampilkan Halaman Sukses
+                        setSuccessData(bookingData);
+                        // Scroll ke atas agar user melihat pesan sukses
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+
+                    } catch (dbError: any) {
+                        console.error("Database/WA Error:", dbError);
+                        alert("Pembayaran berhasil, namun gagal menyimpan data. Mohon screenshot ini dan hubungi Admin.");
+                    }
                 },
-                onPending: () => {
-                    setSuccessData(bookingData);
-                    window.scrollTo(0, 0);
-                },
-                onError: () => alert("Pembayaran Gagal")
+                onPending: function (result: any) { alert("Menunggu pembayaran..."); },
+                onError: function (result: any) { alert("Pembayaran gagal!"); },
+                onClose: function () { alert('Anda menutup popup pembayaran sebelum menyelesaikan transaksi.'); }
             });
 
-        } catch (error: any) {
-            alert("Error: " + error.message);
+        } catch (error) {
             console.error(error);
+            alert("Gagal memproses pembayaran (Server Error).");
         } finally {
             setLoading(false);
         }
@@ -186,7 +234,7 @@ export default function BookingPage() {
                     </div>
                 </div>
 
-                {/* --- LOGIC TAMPILAN: JIKA SUKSES -> TAMPILKAN INVOICE, JIKA BELUM -> TAMPILKAN FORM --- */}
+                {/* --- LOGIC TAMPILAN --- */}
                 {successData ? (
                     // --- STEP 3: SUCCESS VIEW (INVOICE) ---
                     <div className="bg-white p-10 rounded-3xl shadow-xl border border-gray-100 text-center max-w-3xl mx-auto animate-in fade-in zoom-in duration-500">
@@ -240,7 +288,7 @@ export default function BookingPage() {
                                 <Home size={18} /> Back to Home
                             </button>
                             <button
-                                onClick={() => window.open(`/admin/invoice/${successData.id}`, '_blank')}
+                                onClick={() => window.print()}
                                 className="px-6 py-3 bg-keenan-dark text-white rounded-xl font-bold hover:bg-black flex items-center gap-2 shadow-lg"
                             >
                                 <Printer size={18} /> Print Invoice
@@ -319,7 +367,7 @@ export default function BookingPage() {
                                             </div>
                                         </div>
                                     )}
-                                    {availabilityStatus === 'available' && (
+                                    {availabilityStatus === 'available' && !isChecking && (
                                         <div className="bg-green-50 text-green-700 p-4 rounded-xl flex items-center gap-3 text-sm font-bold border border-green-200">
                                             <CheckCircle size={20} />
                                             <span>Kamar Tersedia. Silakan lanjutkan pembayaran.</span>
@@ -359,10 +407,6 @@ export default function BookingPage() {
                                     <div className="flex justify-between text-sm items-center">
                                         <span className="text-gray-500">Durasi Menginap</span>
                                         <span className="font-semibold">{(new Date(formData.checkOut).getTime() - new Date(formData.checkIn).getTime()) / (1000 * 3600 * 24) || 0} Malam</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm items-center text-green-600">
-                                        <span className="flex items-center gap-1"><ShieldCheck size={14} /> Taxes & Fees</span>
-                                        <span className="font-bold">Included</span>
                                     </div>
                                     <div className="border-t border-dashed pt-4 mt-2 flex justify-between items-end">
                                         <span className="font-black text-gray-900 text-lg">Total</span>
