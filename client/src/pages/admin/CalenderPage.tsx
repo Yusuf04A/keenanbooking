@@ -15,15 +15,12 @@ export default function CalendarPage() {
     const [availabilityMsg, setAvailabilityMsg] = useState('');
 
     const [rooms, setRooms] = useState<any[]>([]);
+    // Pastikan state awal memiliki semua field
     const [newBooking, setNewBooking] = useState({
-        customer_name: '',
-        customer_email: '',
-        customer_phone: '',
-        room_type_id: '',
-        check_in_date: '',
-        check_out_date: '',
-        total_price: 0,
-        notes: ''
+        customer_name: '', customer_email: '', customer_phone: '',
+        room_type_id: '', check_in_date: '', check_out_date: '',
+        total_price: 0, notes: '',
+        booking_source: 'walk_in' // <--- Default untuk admin
     });
 
     const adminName = localStorage.getItem('keenan_admin_name') || 'Admin';
@@ -48,16 +45,15 @@ export default function CalendarPage() {
         setIsChecking(true);
         setAvailabilityMsg('');
 
-        // Cari booking yang tabrakan jadwalnya
-        const { data, error } = await supabase
+        const { data } = await supabase
             .from('bookings')
             .select('id')
             .eq('room_type_id', newBooking.room_type_id)
-            .neq('status', 'cancelled') // Abaikan yang cancel
+            .neq('status', 'cancelled')
             .or(`and(check_in_date.lte.${newBooking.check_out_date},check_out_date.gte.${newBooking.check_in_date})`);
 
         if (data && data.length > 0) {
-            setAvailabilityMsg('⚠️ PERINGATAN: Kamar ini SUDAH TERISI pada tanggal tersebut!');
+            setAvailabilityMsg('⚠️ TERISI: Overbooking Warning!');
         } else {
             setAvailabilityMsg('✅ Kamar Tersedia');
         }
@@ -66,17 +62,10 @@ export default function CalendarPage() {
 
     const fetchRooms = async () => {
         try {
-            // Ambil semua kamar dulu
-            let query = supabase.from('room_types').select(`
-                id, name, base_price, property_id, 
-                properties(name)
-            `);
-
+            let query = supabase.from('room_types').select(`id, name, base_price, property_id, properties(name)`);
             const { data, error } = await query;
             if (error) throw error;
 
-            // FILTER DI SINI (Lebih aman pakai JavaScript 'includes')
-            // Jadi "Luxe Seturan" akan cocok dengan "Keenan Luxe Seturan"
             const filteredRooms = (data || []).filter(room => {
                 if (adminScope === 'all') return true;
                 const propName = room.properties?.name || '';
@@ -98,26 +87,48 @@ export default function CalendarPage() {
 
             const { data } = await query;
             if (data) {
-                // Filter event manual juga
+                // Filter berdasarkan Scope Admin
                 const filteredData = data.filter(b => {
                     if (adminScope === 'all') return true;
                     return b.properties?.name.toLowerCase().includes(adminScope.toLowerCase());
                 });
 
-                const formattedEvents = filteredData.map(booking => ({
-                    id: booking.id,
-                    title: `${booking.customer_name} (${booking.room_types?.name})`,
-                    start: booking.check_in_date,
-                    end: booking.check_out_date,
-                    backgroundColor: booking.status === 'paid' ? '#C5A059' : '#cbd5e1',
-                    borderColor: 'transparent',
-                    textColor: booking.status === 'paid' ? '#ffffff' : '#64748b',
-                    extendedProps: {
-                        status: booking.status,
-                        guest: booking.customer_name,
-                        room: booking.room_types?.name
+                const formattedEvents = filteredData.map(booking => {
+                    // --- LOGIKA WARNA BARU DISINI ---
+                    let bgColor = '#C5A059'; // Default: Gold (Paid)
+
+                    switch (booking.status) {
+                        case 'checked_in':
+                            bgColor = '#2563EB'; // Biru (Sedang Menginap)
+                            break;
+                        case 'checked_out':
+                            bgColor = '#ff6767'; // Merah (Sudah Pulang)
+                            break;
+                        case 'cancelled':
+                            bgColor = '#94A3B8'; // Abu-abu (Batal)
+                            break;
+                        case 'pending_payment':
+                            bgColor = '#8e8e8e'; // Orange (Belum Bayar)
+                            break;
+                        default:
+                            bgColor = '#C5A059'; // Paid
                     }
-                }));
+
+                    return {
+                        id: booking.id,
+                        title: `${booking.customer_name} (${booking.room_types?.name})`,
+                        start: booking.check_in_date,
+                        end: booking.check_out_date,
+                        backgroundColor: bgColor, // <--- Pakai warna yang sudah dipilih
+                        borderColor: 'transparent',
+                        textColor: '#ffffff', // Semua tulisan jadi putih biar kontras
+                        extendedProps: {
+                            status: booking.status,
+                            guest: booking.customer_name,
+                            room: booking.room_types?.name
+                        }
+                    };
+                });
                 setEvents(formattedEvents);
             }
         } catch (err) {
@@ -148,6 +159,7 @@ export default function CalendarPage() {
 
         const orderId = `MANUAL-${Date.now()}`;
 
+        // PERBAIKAN: Mapping nama field sesuai database kamu
         const { error } = await supabase.from('bookings').insert([{
             booking_code: orderId,
             customer_name: newBooking.customer_name,
@@ -157,10 +169,11 @@ export default function CalendarPage() {
             property_id: selectedRoom.property_id,
             check_in_date: newBooking.check_in_date,
             check_out_date: newBooking.check_out_date,
+            booking_source: newBooking.booking_source,
             status: 'paid',
             total_price: newBooking.total_price,
             payment_method: 'manual_offline',
-            notes: newBooking.notes
+            customer_notes: newBooking.notes // <-- PENTING: Map ke 'customer_notes'
         }]);
 
         if (error) {
@@ -168,17 +181,16 @@ export default function CalendarPage() {
         } else {
             alert("✅ Booking Berhasil Disimpan!");
             setIsModalOpen(false);
-            setNewBooking({ ...newBooking, customer_name: '', total_price: 0 }); // Reset form
+            setNewBooking({
+                customer_name: '', customer_email: '', customer_phone: '',
+                room_type_id: '', check_in_date: '', check_out_date: '',
+                total_price: 0, notes: ''
+            });
             fetchBookingsToEvents();
         }
     };
 
-    if (loading) return (
-        <div className="h-screen flex flex-col items-center justify-center bg-gray-50">
-            <Loader2 className="animate-spin text-keenan-gold mb-4" size={40} />
-            <p className="font-serif italic text-gray-400">Loading Calendar...</p>
-        </div>
-    );
+    if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-keenan-gold" size={40} /></div>;
 
     return (
         <div className="min-h-screen bg-gray-50 font-sans text-keenan-dark pb-10">
@@ -197,16 +209,12 @@ export default function CalendarPage() {
                             <p className="text-gray-400 text-xs uppercase tracking-[0.2em] font-bold">Scope: {adminScope}</p>
                         </div>
                     </div>
-                    <button
-                        onClick={() => setIsModalOpen(true)}
-                        className="bg-keenan-dark text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-black transition-all shadow-lg text-sm tracking-widest"
-                    >
+                    <button onClick={() => setIsModalOpen(true)} className="bg-keenan-dark text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-black transition-all shadow-lg text-sm tracking-widest">
                         <Plus size={18} /> ADD MANUAL BOOKING
                     </button>
                 </div>
             </div>
 
-            {/* Calendar */}
             <div className="container mx-auto px-4 lg:px-8">
                 <div className="bg-white p-4 md:p-8 rounded-3xl shadow-xl border border-gray-100 custom-calendar overflow-hidden">
                     <FullCalendar
@@ -220,7 +228,7 @@ export default function CalendarPage() {
                 </div>
             </div>
 
-            {/* MODAL INPUT MANUAL */}
+            {/* MODAL INPUT MANUAL - FORM SUDAH DIPERBAIKI */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
                     <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
@@ -233,13 +241,50 @@ export default function CalendarPage() {
                         </div>
 
                         <form onSubmit={handleManualSubmit} className="p-8 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-5">
+
                             <div className="md:col-span-2">
                                 <label className="flex items-center gap-2 text-[10px] font-black text-keenan-gold uppercase tracking-widest mb-2"><User size={12} /> Nama Lengkap</label>
                                 <input required type="text" placeholder="Nama Tamu" className="w-full border-b-2 border-gray-100 p-2 outline-none focus:border-keenan-gold transition-colors"
+                                    value={newBooking.customer_name}
                                     onChange={e => setNewBooking({ ...newBooking, customer_name: e.target.value })} />
                             </div>
 
-                            {/* PILIH KAMAR (DROPDOWN) */}
+                            <div className="md:col-span-2">
+                                <label className="block text-[10px] font-black text-keenan-gold uppercase tracking-widest mb-2">Sumber Booking (OTA)</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {['walk_in', 'agoda', 'traveloka', 'tiket.com', 'booking.com', 'airbnb'].map((source) => (
+                                        <button
+                                            key={source}
+                                            type="button"
+                                            onClick={() => setNewBooking({ ...newBooking, booking_source: source })}
+                                            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase border transition-all ${newBooking.booking_source === source
+                                                ? 'bg-keenan-gold text-white border-keenan-gold'
+                                                : 'bg-white text-gray-400 border-gray-200 hover:border-keenan-gold'
+                                                }`}
+                                        >
+                                            {source.replace('_', ' ')}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* FIELD HP & EMAIL DIKEMBALIKAN */}
+                            <div>
+                                <label className="flex items-center gap-2 text-[10px] font-black text-keenan-gold uppercase tracking-widest mb-2"><Phone size={12} /> No. WhatsApp</label>
+                                <input required type="text" placeholder="0812..." className="w-full border-b-2 border-gray-100 p-2 outline-none focus:border-keenan-gold transition-colors"
+                                    value={newBooking.customer_phone}
+                                    onChange={e => setNewBooking({ ...newBooking, customer_phone: e.target.value })} />
+                            </div>
+
+                            <div>
+                                <label className="flex items-center gap-2 text-[10px] font-black text-keenan-gold uppercase tracking-widest mb-2"><Mail size={12} /> Email Tamu</label>
+                                <input required type="email" placeholder="email@tamu.com" className="w-full border-b-2 border-gray-100 p-2 outline-none focus:border-keenan-gold transition-colors"
+                                    value={newBooking.customer_email}
+                                    onChange={e => setNewBooking({ ...newBooking, customer_email: e.target.value })} />
+                            </div>
+
+                            <div className="md:col-span-2 border-t pt-4"></div>
+
                             <div>
                                 <label className="block text-[10px] font-black text-keenan-gold uppercase tracking-widest mb-2">Pilih Kamar</label>
                                 <select required className="w-full border-b-2 border-gray-100 p-2 outline-none focus:border-keenan-gold bg-white"
@@ -248,12 +293,9 @@ export default function CalendarPage() {
                                 >
                                     <option value="">-- {rooms.length > 0 ? 'Pilih Tipe Kamar' : 'Memuat Kamar...'} --</option>
                                     {rooms.map(r => (
-                                        <option key={r.id} value={r.id}>
-                                            {r.properties?.name} - {r.name}
-                                        </option>
+                                        <option key={r.id} value={r.id}>{r.properties?.name} - {r.name}</option>
                                     ))}
                                 </select>
-                                {rooms.length === 0 && <p className="text-xs text-red-400 mt-1">*Tidak ada kamar ditemukan untuk wilayah ini.</p>}
                             </div>
 
                             <div>
@@ -263,17 +305,26 @@ export default function CalendarPage() {
                                     onChange={e => setNewBooking({ ...newBooking, total_price: parseInt(e.target.value) })} />
                             </div>
 
-                            {/* TANGGAL & CHECK ALLOTMENT */}
                             <div>
                                 <label className="block text-[10px] font-black text-keenan-gold uppercase tracking-widest mb-2">Check-In</label>
                                 <input required type="date" className="w-full border-b-2 border-gray-100 p-2 outline-none focus:border-keenan-gold"
+                                    value={newBooking.check_in_date}
                                     onChange={e => setNewBooking({ ...newBooking, check_in_date: e.target.value })} />
                             </div>
 
                             <div>
                                 <label className="block text-[10px] font-black text-keenan-gold uppercase tracking-widest mb-2">Check-Out</label>
                                 <input required type="date" className="w-full border-b-2 border-gray-100 p-2 outline-none focus:border-keenan-gold"
+                                    value={newBooking.check_out_date}
                                     onChange={e => setNewBooking({ ...newBooking, check_out_date: e.target.value })} />
+                            </div>
+
+                            {/* FIELD NOTES DIKEMBALIKAN */}
+                            <div className="md:col-span-2">
+                                <label className="flex items-center gap-2 text-[10px] font-black text-keenan-gold uppercase tracking-widest mb-2"><MessageSquare size={12} /> Catatan (Notes)</label>
+                                <textarea className="w-full border border-gray-200 rounded-lg p-3 outline-none focus:border-keenan-gold text-sm" rows={2} placeholder="Permintaan khusus..."
+                                    value={newBooking.notes}
+                                    onChange={e => setNewBooking({ ...newBooking, notes: e.target.value })}></textarea>
                             </div>
 
                             {/* ALERT KETERSEDIAAN */}

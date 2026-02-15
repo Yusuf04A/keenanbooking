@@ -5,20 +5,16 @@ import BookingPage from './pages/booking/BookingPage';
 import AdminLogin from './pages/admin/Login';
 import AdminDashboard from './pages/admin/Dashboard';
 import CalendarPage from './pages/admin/CalenderPage';
+import InvoicePage from './pages/admin/Invoice';
 
 const NotFound = () => <div className="p-10 text-center">404 - Halaman Tidak Ditemukan</div>;
 
 // --- KOMPONEN SATPAM (PROTECTED ROUTE) ---
-// Tugasnya ngecek: "Kamu punya tiket admin gak?"
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
   const token = localStorage.getItem('keenan_admin_token');
-
   if (!token) {
-    // Kalau gak punya tiket, tendang ke halaman login
     return <Navigate to="/admin/login" replace />;
   }
-
-  // Kalau punya, silakan masuk
   return children;
 };
 
@@ -26,15 +22,21 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* PUBLIC (Siapapun boleh masuk) */}
+        {/* --- PUBLIC ROUTES (Bisa Diakses Siapapun) --- */}
         <Route path="/" element={<BookingSearch />} />
         <Route path="/property/:id" element={<PropertyDetails />} />
         <Route path="/booking" element={<BookingPage />} />
 
-        {/* ADMIN (Harus Login Dulu) */}
+        {/* 🔥 PERBAIKAN: Invoice ditaruh sini (Tanpa ProtectedRoute) */}
+        {/* Supaya setelah bayar, user bisa langsung diarahkan kesini */}
+        <Route path="/admin/invoice/:id" element={<InvoicePage />} />
+
+
+        {/* --- ADMIN AUTH --- */}
         <Route path="/admin/login" element={<AdminLogin />} />
 
-        {/* DASHBOARD DIPROTEKSI */}
+
+        {/* --- PROTECTED ROUTES (Hanya Admin) --- */}
         <Route
           path="/admin/dashboard"
           element={
@@ -44,8 +46,6 @@ function App() {
           }
         />
 
-        <Route path="*" element={<NotFound />} />
-
         <Route
           path="/admin/calendar"
           element={
@@ -54,6 +54,10 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* 404 Not Found */}
+        <Route path="*" element={<NotFound />} />
+
       </Routes>
     </BrowserRouter>
   );

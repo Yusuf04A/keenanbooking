@@ -1,99 +1,112 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, Loader2 } from 'lucide-react';
+import { supabase } from '../../lib/supabase'; // Pastikan path ini benar
+import { Lock, User, Loader2, AlertCircle } from 'lucide-react';
 
 export default function AdminLogin() {
     const navigate = useNavigate();
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
-    const [formData, setFormData] = useState({ email: '', password: '' });
+    const [error, setError] = useState('');
 
-    // Daftar Akun Admin sesuai Wilayah
-    const adminAccounts = [
-        { email: 'seturan@keenan.com', name: 'Admin Seturan', scope: 'Seturan' },
-        { email: 'perumnas@keenan.com', name: 'Admin Perumnas', scope: 'Perumnas' },
-        { email: 'jakal@keenan.com', name: 'Admin Jakal', scope: 'Jakal' },
-        { email: 'luxe@keenan.com', name: 'Admin Luxe Seturan', scope: 'Luxe Seturan' }
-    ];
-
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        setError('');
 
-        setTimeout(() => {
-            const user = adminAccounts.find(u => u.email === formData.email && formData.password === 'admin123');
-            if (user) {
-                localStorage.setItem('keenan_admin_token', 'AUTHORIZED');
-                localStorage.setItem('keenan_admin_name', user.name);
-                localStorage.setItem('keenan_admin_scope', user.scope);
+        try {
+            // 1. Cek ke Database Supabase
+            const { data, error } = await supabase
+                .from('admins')
+                .select('*')
+                .eq('username', username)
+                .eq('password', password) // Note: Di real app production, password harus di-hash!
+                .single();
+
+            if (error || !data) {
+                throw new Error("Username atau Password salah!");
+            }
+
+            // 2. Login Sukses! Simpan data ke LocalStorage
+            localStorage.setItem('keenan_admin_token', 'logged_in_securely'); // Token dummy
+            localStorage.setItem('keenan_admin_name', data.full_name);
+            localStorage.setItem('keenan_admin_role', data.role); // 'superadmin' atau 'admin'
+            localStorage.setItem('keenan_admin_scope', data.scope); // 'all' atau 'Luxe Seturan'
+
+            // 3. Arahkan sesuai Role
+            if (data.role === 'superadmin') {
+                alert(`Selamat Datang, ${data.full_name}! (Mode Superadmin)`);
                 navigate('/admin/dashboard');
             } else {
-                alert("Email atau Password salah!");
-                setLoading(false);
+                alert(`Selamat Datang, ${data.full_name}! (Cabang: ${data.scope})`);
+                navigate('/admin/calendar'); // Admin biasa langsung ke kalender aja biar fokus kerja
             }
-        }, 1000);
+
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
-        <div className="min-h-screen bg-white flex font-sans">
-            {/* KIRI: Visual Branding */}
-            <div className="hidden lg:flex lg:w-3/5 bg-[#1A1A1A] relative items-center justify-center p-12">
-                <div className="absolute inset-0 opacity-40">
-                    <img
-                        src="https://images.unsplash.com/photo-1600585154340-be6191fe75a1?q=80&w=2070"
-                        className="w-full h-full object-cover" alt="Luxury Property"
-                    />
+        <div className="min-h-screen flex items-center justify-center bg-gray-100 font-sans">
+            <div className="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-md">
+                <div className="text-center mb-8">
+                    <h1 className="text-3xl font-serif font-bold text-keenan-dark mb-2">Keenan Admin</h1>
+                    <p className="text-xs text-gray-400 uppercase tracking-[0.2em]">Management System</p>
                 </div>
-                <div className="relative z-10 text-center">
-                    <h1 className="text-[#C5A059] text-7xl font-serif font-bold mb-4 tracking-tighter">KEENAN LIVING</h1>
-                    <p className="text-white text-xl font-light tracking-[0.4em] uppercase">Property Management System</p>
-                </div>
-            </div>
 
-            {/* KANAN: Login Form */}
-            <div className="w-full lg:w-2/5 flex items-center justify-center p-8 md:p-16">
-                <div className="w-full max-w-md">
-                    <div className="mb-10 text-center lg:text-left">
-                        <h2 className="text-4xl font-serif font-bold text-[#1A1A1A] mb-3">Admin Login</h2>
-                        <p className="text-gray-400">Pilih akun sesuai wilayah manajemen Anda.</p>
+                {error && (
+                    <div className="bg-red-50 text-red-600 p-3 rounded-xl flex items-center gap-2 text-sm mb-6 border border-red-100 animate-pulse">
+                        <AlertCircle size={16} /> {error}
+                    </div>
+                )}
+
+                <form onSubmit={handleLogin} className="space-y-6">
+                    <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Username</label>
+                        <div className="relative">
+                            <User className="absolute left-4 top-3.5 text-gray-300" size={18} />
+                            <input
+                                type="text"
+                                required
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                className="w-full pl-12 pr-4 py-3 bg-gray-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-keenan-gold transition-all font-bold text-keenan-dark"
+                                placeholder="Masukan username..."
+                            />
+                        </div>
                     </div>
 
-                    <form onSubmit={handleLogin} className="space-y-6">
-                        <div>
-                            <label className="block text-xs font-bold text-[#C5A059] uppercase tracking-widest mb-2">Work Email</label>
-                            <div className="relative">
-                                <Mail className="absolute left-4 top-4 text-gray-300" size={20} />
-                                <input
-                                    type="email" required
-                                    className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-[#C5A059]/20 focus:border-[#C5A059]"
-                                    placeholder="nama.wilayah@keenan.com"
-                                    value={formData.email}
-                                    onChange={e => setFormData({ ...formData, email: e.target.value })}
-                                />
-                            </div>
+                    <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Password</label>
+                        <div className="relative">
+                            <Lock className="absolute left-4 top-3.5 text-gray-300" size={18} />
+                            <input
+                                type="password"
+                                required
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="w-full pl-12 pr-4 py-3 bg-gray-50 border-none rounded-xl outline-none focus:ring-2 focus:ring-keenan-gold transition-all font-bold text-keenan-dark"
+                                placeholder="••••••••"
+                            />
                         </div>
+                    </div>
 
-                        <div>
-                            <label className="block text-xs font-bold text-[#C5A059] uppercase tracking-widest mb-2">Password</label>
-                            <div className="relative">
-                                <Lock className="absolute left-4 top-4 text-gray-300" size={20} />
-                                <input
-                                    type="password" required
-                                    className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-[#C5A059]/20 focus:border-[#C5A059]"
-                                    placeholder="••••••••"
-                                    value={formData.password}
-                                    onChange={e => setFormData({ ...formData, password: e.target.value })}
-                                />
-                            </div>
-                        </div>
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="w-full bg-keenan-dark text-white py-4 rounded-xl font-bold shadow-lg hover:bg-black transition-all flex items-center justify-center gap-2"
+                    >
+                        {loading ? <Loader2 className="animate-spin" /> : "LOGIN SYSTEM"}
+                    </button>
+                </form>
 
-                        <button
-                            type="submit" disabled={loading}
-                            className="w-full bg-[#1A1A1A] text-white py-5 rounded-xl font-bold tracking-widest hover:bg-black transition-all flex justify-center items-center gap-3 shadow-xl"
-                        >
-                            {loading ? <Loader2 className="animate-spin" /> : "ACCESS SYSTEM"}
-                        </button>
-                    </form>
-                </div>
+                <p className="text-center text-[10px] text-gray-300 mt-8 uppercase tracking-widest">
+                    &copy; 2026 Keenan Living Group
+                </p>
             </div>
         </div>
     );

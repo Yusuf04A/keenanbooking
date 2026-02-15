@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { MapPin, Users, Wifi, Wind, Coffee, ArrowLeft, Loader2 } from 'lucide-react';
-//import { BookingFormModal } from '../../features/booking/components/BookingFormModal';
 
 // Tipe Data
 interface RoomType {
@@ -13,7 +12,7 @@ interface RoomType {
     capacity: number;
     image_url: string;
     facilities: string[];
-    property_id: string; // Tambahkan ini
+    property_id: string;
 }
 
 interface Property {
@@ -22,12 +21,12 @@ interface Property {
     address: string;
     description: string;
     image_url: string;
-    room_types: RoomType[]; // Relasi nested
+    room_types: RoomType[];
 }
 
 const PropertyDetails = () => {
-    const { id } = useParams(); // Ambil ID dari URL
-    const [searchParams] = useSearchParams(); // Ambil tanggal dari URL (?checkIn=...)
+    const { id } = useParams();
+    const [searchParams] = useSearchParams();
     const navigate = useNavigate();
 
     const [property, setProperty] = useState<Property | null>(null);
@@ -35,21 +34,17 @@ const PropertyDetails = () => {
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     // Ambil data check-in/out dari URL (atau default besok)
+    // Variabel ini bernama 'checkIn' dan 'checkOut'
     const checkIn = searchParams.get('checkIn') || new Date().toISOString().split('T')[0];
     const checkOut = searchParams.get('checkOut') || new Date(Date.now() + 86400000).toISOString().split('T')[0];
     const guests = parseInt(searchParams.get('guests') || '1');
 
-    // State Modal
-    //const [selectedRoom, setSelectedRoom] = useState<RoomType | null>(null);
-    //const [isModalOpen, setIsModalOpen] = useState(false);
-
-    // Fetch Data Property (useEffect harus di top level)
+    // Fetch Data Property
     useEffect(() => {
         const fetchPropertyDetails = async () => {
             if (!id) return;
 
             try {
-                // Query Supabase: Ambil Property BESERTA Room Types-nya (Join)
                 const { data, error } = await supabase
                     .from('properties')
                     .select(`
@@ -74,12 +69,6 @@ const PropertyDetails = () => {
 
         fetchPropertyDetails();
     }, [id]);
-
-    // Handler Buka Modal
-    const handleSelectRoom = (roomId: string) => {
-        // Navigasi ke halaman booking dengan membawa data via URL params
-        navigate(`/booking?roomId=${roomId}&checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}`);
-    };
 
     // Format Rupiah
     const formatRupiah = (price: number) => {
@@ -199,10 +188,18 @@ const PropertyDetails = () => {
                                             <p className="text-2xl font-bold text-keenan-gold">{formatRupiah(room.base_price)} <span className="text-sm text-gray-400 font-normal">/ night</span></p>
                                         </div>
                                         <button
-                                            className="bg-keenan-dark text-white px-8 py-3 rounded font-bold uppercase tracking-wider hover:bg-keenan-gold transition-colors"
-                                            onClick={() => handleSelectRoom(room.id)} // <--- Panggil fungsi navigasi
+                                            onClick={() => navigate('/booking', {
+                                                state: {
+                                                    room: room,
+                                                    propertyName: property.name,
+                                                    // PERBAIKAN: Gunakan variabel 'checkIn' dan 'checkOut' yang benar
+                                                    preSelectedCheckIn: checkIn,
+                                                    preSelectedCheckOut: checkOut
+                                                }
+                                            })}
+                                            className="bg-keenan-dark text-white px-6 py-3 rounded-lg font-bold hover:bg-black transition-all"
                                         >
-                                            Select Room
+                                            SELECT ROOM
                                         </button>
                                     </div>
                                 </div>
