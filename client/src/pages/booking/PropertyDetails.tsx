@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { MapPin, Users, Wifi, Wind, Coffee, ArrowLeft, Loader2 } from 'lucide-react';
+import {
+    MapPin, Users, Wifi, Wind, Coffee, ArrowLeft, Loader2,
+    Tv, Car, Utensils, Droplets, MonitorPlay
+} from 'lucide-react';
 
 // Tipe Data
 interface RoomType {
@@ -11,7 +14,7 @@ interface RoomType {
     base_price: number;
     capacity: number;
     image_url: string;
-    facilities: string[];
+    facilities: string[]; // <--- Ini Array dari Database
     property_id: string;
 }
 
@@ -31,175 +34,201 @@ const PropertyDetails = () => {
 
     const [property, setProperty] = useState<Property | null>(null);
     const [loading, setLoading] = useState(true);
-    const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const [checkIn, setCheckIn] = useState(searchParams.get('checkIn') || new Date().toISOString().split('T')[0]);
+    const [checkOut, setCheckOut] = useState(searchParams.get('checkOut') || new Date(Date.now() + 86400000).toISOString().split('T')[0]);
+    const [guests, setGuests] = useState(parseInt(searchParams.get('guests') || '1'));
 
-    // Ambil data check-in/out dari URL (atau default besok)
-    // Variabel ini bernama 'checkIn' dan 'checkOut'
-    const checkIn = searchParams.get('checkIn') || new Date().toISOString().split('T')[0];
-    const checkOut = searchParams.get('checkOut') || new Date(Date.now() + 86400000).toISOString().split('T')[0];
-    const guests = parseInt(searchParams.get('guests') || '1');
-
-    // Fetch Data Property
     useEffect(() => {
         const fetchPropertyDetails = async () => {
             if (!id) return;
-
             try {
+                // Ambil Data Property + Room Types
                 const { data, error } = await supabase
                     .from('properties')
-                    .select(`
-                      *,
-                      room_types (*)
-                    `)
+                    .select(`*, room_types (*)`)
                     .eq('id', id)
                     .single();
 
-                if (error) {
-                    throw error;
-                }
-
+                if (error) throw error;
                 setProperty(data);
-            } catch (err: any) {
-                console.error("Error Fetching Property:", err);
-                setErrorMsg(err.message || "Gagal memuat data properti.");
+            } catch (err) {
+                console.error(err);
             } finally {
                 setLoading(false);
             }
         };
-
         fetchPropertyDetails();
     }, [id]);
 
-    // Format Rupiah
+    // --- FUNGSI SAKTI: UBAH TEXT JADI ICON ---
+    // Ini kuncinya biar fasilitas sinkron sama Superadmin
+    const renderFacilityIcon = (facilityName: string) => {
+        const f = facilityName.toLowerCase();
+
+        // Mapping Nama ke Icon
+        if (f.includes('wifi')) return <div key={f} className="flex items-center gap-1"><Wifi size={14} /> {facilityName}</div>;
+        if (f.includes('ac') || f.includes('air')) return <div key={f} className="flex items-center gap-1"><Wind size={14} /> {facilityName}</div>;
+        if (f.includes('break')) return <div key={f} className="flex items-center gap-1"><Coffee size={14} /> {facilityName}</div>;
+        if (f.includes('tv')) return <div key={f} className="flex items-center gap-1"><Tv size={14} /> {facilityName}</div>;
+        if (f.includes('netflix')) return <div key={f} className="flex items-center gap-1"><MonitorPlay size={14} /> {facilityName}</div>;
+        if (f.includes('park')) return <div key={f} className="flex items-center gap-1"><Car size={14} /> {facilityName}</div>;
+        if (f.includes('kitchen')) return <div key={f} className="flex items-center gap-1"><Utensils size={14} /> {facilityName}</div>;
+        if (f.includes('hot') || f.includes('water')) return <div key={f} className="flex items-center gap-1"><Droplets size={14} /> {facilityName}</div>;
+
+        // Default Icon kalau namanya aneh
+        return <div key={f} className="flex items-center gap-1 text-gray-500">✓ {facilityName}</div>;
+    };
+
     const formatRupiah = (price: number) => {
         return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(price);
     };
 
-    // Render Loading
-    if (loading) return (
-        <div className="min-h-screen flex items-center justify-center text-keenan-gold">
-            <Loader2 className="animate-spin mr-2" /> Loading property details...
-        </div>
-    );
-
-    // Render Error
-    if (errorMsg) return (
-        <div className="min-h-screen flex flex-col items-center justify-center p-4 text-center">
-            <h2 className="text-xl font-bold text-red-500 mb-2">Terjadi Kesalahan</h2>
-            <p className="text-gray-600 mb-4">{errorMsg}</p>
-            <button onClick={() => navigate('/')} className="px-4 py-2 bg-keenan-dark text-white rounded">Kembali ke Beranda</button>
-        </div>
-    );
-
-    // Render Not Found
-    if (!property) return (
-        <div className="min-h-screen flex items-center justify-center">
-            <p>Property not found.</p>
-        </div>
-    );
+    if (loading) return <div className="h-screen flex items-center justify-center bg-[#FEFBF3]"><Loader2 className="animate-spin text-keenan-gold" /></div>;
+    if (!property) return <div>Not Found</div>;
 
     return (
-        <div className="min-h-screen bg-keenan-cream text-keenan-dark pb-20">
+        <div className="min-h-screen bg-[#FEFBF3] font-sans text-gray-800">
 
-            {/* --- HEADER IMAGE --- */}
-            <div className="relative h-[50vh]">
+            {/* --- HEADER IMAGE (FULL WIDTH) --- */}
+            <div className="relative h-[40vh] md:h-[50vh] w-full group">
                 <img
-                    src={property.image_url || "https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=2070"}
+                    src={property.image_url || "https://via.placeholder.com/1500"}
                     alt={property.name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover transition-transform duration-1000"
                 />
-                <div className="absolute inset-0 bg-black/40" />
-                <div className="absolute bottom-0 left-0 p-8 text-white container mx-auto">
-                    <button onClick={() => navigate(-1)} className="mb-4 flex items-center gap-2 text-sm hover:text-keenan-gold transition-colors">
-                        <ArrowLeft size={16} /> Back to Search
+                <div className="absolute inset-0 bg-black/30" />
+
+                {/* Navbar Overlay */}
+                <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-center text-white z-20">
+                    <button onClick={() => navigate('/')} className="flex items-center gap-2 hover:text-keenan-gold transition-colors">
+                        <ArrowLeft size={20} /> <span className="text-sm font-bold uppercase tracking-widest">Back to Search</span>
                     </button>
-                    <h1 className="text-4xl md:text-5xl font-serif font-bold mb-2">{property.name}</h1>
-                    <p className="flex items-center text-lg opacity-90">
-                        <MapPin size={18} className="mr-2 text-keenan-gold" /> {property.address}
-                    </p>
+                </div>
+
+                {/* Title Overlay */}
+                <div className="absolute bottom-0 left-0 w-full p-8 md:p-16 text-white bg-gradient-to-t from-black/80 to-transparent">
+                    <div className="container mx-auto">
+                        <h1 className="text-4xl md:text-6xl font-serif font-bold mb-2">{property.name}</h1>
+                        <p className="flex items-center text-sm md:text-lg opacity-90 font-light">
+                            <MapPin size={18} className="mr-2 text-keenan-gold" /> {property.address}
+                        </p>
+                    </div>
                 </div>
             </div>
 
-            <div className="container mx-auto px-4 -mt-10 relative z-10">
+            {/* --- STICKY SEARCH BAR (MENGAMBANG) --- */}
+            <div className="sticky top-0 z-40 bg-[#FEFBF3] shadow-sm border-b border-gray-200 py-4 px-4 transition-all">
+                <div className="container mx-auto max-w-6xl flex flex-col md:flex-row items-end md:items-center gap-4 text-xs font-bold uppercase tracking-widest text-gray-400">
 
-                {/* --- INFO BAR --- */}
-                <div className="bg-white p-6 rounded shadow-lg border-t-4 border-keenan-gold flex flex-wrap gap-6 items-center justify-between mb-10">
-                    <div>
-                        <p className="text-xs text-gray-400 uppercase tracking-wider font-bold">Check In</p>
-                        <p className="font-bold text-lg">{new Date(checkIn).toLocaleDateString('id-ID', { dateStyle: 'long' })}</p>
+                    <div className="flex-1 w-full bg-white p-2 rounded border border-gray-200">
+                        <label className="block mb-1 text-[10px]">Check In</label>
+                        <input type="date" value={checkIn} onChange={e => setCheckIn(e.target.value)}
+                            className="w-full text-sm font-bold text-gray-800 outline-none uppercase font-serif" />
                     </div>
-                    <div>
-                        <p className="text-xs text-gray-400 uppercase tracking-wider font-bold">Check Out</p>
-                        <p className="font-bold text-lg">{new Date(checkOut).toLocaleDateString('id-ID', { dateStyle: 'long' })}</p>
+
+                    <div className="flex-1 w-full bg-white p-2 rounded border border-gray-200">
+                        <label className="block mb-1 text-[10px]">Check Out</label>
+                        <input type="date" value={checkOut} onChange={e => setCheckOut(e.target.value)}
+                            className="w-full text-sm font-bold text-gray-800 outline-none uppercase font-serif" />
                     </div>
-                    <div>
-                        <p className="text-xs text-gray-400 uppercase tracking-wider font-bold">Guests</p>
-                        <p className="font-bold text-lg">{guests} Person</p>
+
+                    <div className="w-full md:w-32 bg-white p-2 rounded border border-gray-200">
+                        <label className="block mb-1 text-[10px]">Guests</label>
+                        <select value={guests} onChange={e => setGuests(parseInt(e.target.value))}
+                            className="w-full text-sm font-bold text-gray-800 outline-none">
+                            {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n} Person</option>)}
+                        </select>
                     </div>
-                    <div>
-                        <button className="text-keenan-gold text-sm font-bold underline" onClick={() => navigate('/')}>
-                            Change Dates
-                        </button>
-                    </div>
+
+                    <button className="text-keenan-gold underline cursor-pointer hover:text-black transition-colors" onClick={() => window.location.reload()}>
+                        Update Dates
+                    </button>
+                </div>
+            </div>
+
+            {/* --- MAIN CONTENT --- */}
+            <div className="container mx-auto px-4 py-12 max-w-6xl">
+
+                {/* Description */}
+                <div className="mb-12 max-w-3xl">
+                    <h2 className="text-2xl font-serif font-bold text-keenan-dark mb-4 border-l-4 border-keenan-gold pl-4">About This Property</h2>
+                    <p className="text-gray-600 leading-relaxed text-sm md:text-base">
+                        {property.description || "Rasakan kenyamanan menginap dengan fasilitas lengkap dan pelayanan terbaik. Cocok untuk liburan keluarga maupun perjalanan bisnis Anda."}
+                    </p>
                 </div>
 
-                {/* --- ROOM LIST --- */}
-                <div className="space-y-8">
-                    <h2 className="text-2xl font-serif border-l-4 border-keenan-gold pl-4">Available Rooms</h2>
+                {/* --- ROOM LIST (LAYOUT BARU) --- */}
+                <div className="space-y-12">
+                    <h2 className="text-2xl font-serif font-bold text-keenan-dark mb-8 flex items-center gap-3">
+                        <span className="w-8 h-[1px] bg-gray-400"></span> Available Rooms
+                    </h2>
 
                     {(!property.room_types || property.room_types.length === 0) ? (
-                        <div className="bg-white p-8 rounded border border-dashed text-center">
-                            <p className="text-gray-500 italic">Belum ada tipe kamar yang diinput untuk properti ini.</p>
+                        <div className="text-center py-20 bg-white border border-dashed border-gray-300 rounded">
+                            <p className="text-gray-400 italic">Belum ada kamar yang tersedia saat ini.</p>
                         </div>
                     ) : (
                         property.room_types.map((room) => (
-                            <div key={room.id} className="bg-white rounded-lg overflow-hidden shadow-md flex flex-col md:flex-row hover:shadow-xl transition-shadow border border-gray-100">
-                                {/* Room Image */}
-                                <div className="md:w-1/3 h-64 md:h-auto relative">
+                            // CARD STYLE: Horizontal (Gambar Kiri, Info Kanan)
+                            <div key={room.id} className="bg-white rounded-none border border-gray-200 flex flex-col md:flex-row overflow-hidden shadow-[0_2px_10px_-5px_rgba(0,0,0,0.1)] hover:shadow-lg transition-shadow">
+
+                                {/* Image Section (40%) */}
+                                <div className="md:w-5/12 h-64 md:h-auto relative overflow-hidden group">
                                     <img
-                                        src={room.image_url || "https://images.unsplash.com/photo-1611892440504-42a792e24d32?q=80&w=2070"}
+                                        src={room.image_url || "https://via.placeholder.com/800"}
                                         alt={room.name}
-                                        className="w-full h-full object-cover"
+                                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                                     />
+                                    <div className="absolute top-4 right-4 bg-white/90 backdrop-blur text-xs font-bold px-3 py-1 rounded shadow-sm">
+                                        Max {room.capacity}
+                                    </div>
                                 </div>
 
-                                {/* Room Details */}
-                                <div className="p-6 md:w-2/3 flex flex-col justify-between">
+                                {/* Details Section (60%) */}
+                                <div className="md:w-7/12 p-6 md:p-8 flex flex-col justify-between">
                                     <div>
                                         <div className="flex justify-between items-start mb-2">
-                                            <h3 className="text-2xl font-bold font-serif">{room.name}</h3>
-                                            <div className="flex items-center gap-1 text-sm bg-keenan-gray px-2 py-1 rounded">
-                                                <Users size={14} /> Max {room.capacity}
-                                            </div>
+                                            <h3 className="text-2xl md:text-3xl font-serif font-bold text-keenan-dark">{room.name}</h3>
                                         </div>
-                                        <p className="text-gray-500 mb-4 text-sm line-clamp-2">{room.description || "Kamar nyaman dengan fasilitas lengkap standar bintang lima."}</p>
+                                        <p className="text-gray-500 text-sm mb-6 line-clamp-2">
+                                            {room.description || "Kamar eksklusif dengan desain modern dan nyaman."}
+                                        </p>
 
-                                        {/* Facilities Icons */}
-                                        <div className="flex gap-4 text-gray-400 mb-6">
-                                            <div className="flex items-center gap-1 text-xs"><Wifi size={14} /> Free Wifi</div>
-                                            <div className="flex items-center gap-1 text-xs"><Wind size={14} /> AC</div>
-                                            <div className="flex items-center gap-1 text-xs"><Coffee size={14} /> Breakfast</div>
+                                        {/* --- DYNAMIC FACILITIES RENDER --- */}
+                                        <div className="mb-6">
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Room Amenities</p>
+                                            <div className="flex flex-wrap gap-4 text-xs text-gray-500 font-medium">
+                                                {room.facilities && room.facilities.length > 0 ? (
+                                                    // LOOPING ARRAY DARI DATABASE
+                                                    room.facilities.map(fac => renderFacilityIcon(fac))
+                                                ) : (
+                                                    <span className="text-gray-400 italic text-xs">No facilities listed</span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-auto">
+                                    <div className="flex items-end justify-between border-t border-gray-100 pt-6 mt-4">
                                         <div>
-                                            <p className="text-xs text-gray-400 uppercase">Start From</p>
-                                            <p className="text-2xl font-bold text-keenan-gold">{formatRupiah(room.base_price)} <span className="text-sm text-gray-400 font-normal">/ night</span></p>
+                                            <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest mb-1">Start From</p>
+                                            <div className="flex items-baseline gap-1">
+                                                <span className="text-2xl font-bold text-keenan-gold font-serif">{formatRupiah(room.base_price)}</span>
+                                                <span className="text-xs text-gray-400">/ night</span>
+                                            </div>
                                         </div>
+
                                         <button
                                             onClick={() => navigate('/booking', {
                                                 state: {
                                                     room: room,
                                                     propertyName: property.name,
-                                                    // PERBAIKAN: Gunakan variabel 'checkIn' dan 'checkOut' yang benar
                                                     preSelectedCheckIn: checkIn,
                                                     preSelectedCheckOut: checkOut
                                                 }
                                             })}
-                                            className="bg-keenan-dark text-white px-6 py-3 rounded-lg font-bold hover:bg-black transition-all"
+                                            className="bg-[#1A1A1A] text-white px-8 py-3 rounded-sm font-bold uppercase text-xs tracking-[0.2em] hover:bg-keenan-gold transition-colors"
                                         >
-                                            SELECT ROOM
+                                            Select Room
                                         </button>
                                     </div>
                                 </div>

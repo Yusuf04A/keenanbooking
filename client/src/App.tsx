@@ -6,6 +6,7 @@ import AdminLogin from './pages/admin/Login';
 import AdminDashboard from './pages/admin/Dashboard';
 import CalendarPage from './pages/admin/CalenderPage';
 import InvoicePage from './pages/admin/Invoice';
+import SuperAdminDashboard from './pages/admin/SuperAdminDashboard';
 
 const NotFound = () => <div className="p-10 text-center">404 - Halaman Tidak Ditemukan</div>;
 
@@ -51,6 +52,15 @@ function App() {
           element={
             <ProtectedRoute>
               <CalendarPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/super-dashboard"  // <--- Ganti nama path biar keren
+          element={
+            <ProtectedRoute>
+              <SuperAdminDashboard />
             </ProtectedRoute>
           }
         />

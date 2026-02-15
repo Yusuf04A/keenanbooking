@@ -1,164 +1,259 @@
-import { useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Calendar, Users, MapPin, Search } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import {
+    Search, MapPin, ArrowRight,
+    Wifi, Wind, Coffee, Tv, Car, Utensils, ShieldCheck
+} from 'lucide-react';
 
-interface Property {
-    id: string;
-    name: string;
-    address: string;
-    image_url: string;
-    description: string;
-}
-
-const BookingSearch = () => {
-    const [properties, setProperties] = useState<Property[]>([]);
-    const [loading, setLoading] = useState(true);
+export default function BookingSearch() {
     const navigate = useNavigate();
+    const [properties, setProperties] = useState<any[]>([]);
 
-    // State Form Pencarian
-    const [searchParams, setSearchParams] = useState({
-        checkIn: '',
-        checkOut: '',
-        guests: 1
-    });
+    // Search State
+    const [checkIn, setCheckIn] = useState('');
+    const [checkOut, setCheckOut] = useState('');
+    const [guests, setGuests] = useState(1);
+    const [selectedProp, setSelectedProp] = useState('');
 
-    // Fetch Data Property dari Supabase
     useEffect(() => {
-        const fetchProperties = async () => {
-            try {
-                const { data, error } = await supabase
-                    .from('properties')
-                    .select('*');
-
-                if (error) throw error;
-                setProperties(data || []);
-            } catch (err) {
-                console.error("Gagal ambil data:", err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchProperties();
     }, []);
 
+    const fetchProperties = async () => {
+        // PERBAIKAN LOGIKA 1: Tambahkan 'facilities' di dalam query room_types
+        const { data } = await supabase
+            .from('properties')
+            .select('*, room_types(base_price, facilities)');
+
+        setProperties(data || []);
+    };
+
+    const handleSearch = () => {
+        if (!selectedProp) return alert("Pilih lokasi properti dulu!");
+        const prop = properties.find(p => p.name === selectedProp);
+        if (prop) {
+            navigate(`/property/${prop.id}?checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}`);
+        }
+    };
+
+    // PERBAIKAN LOGIKA 2: Helper Icon lebih lengkap & return JSX rapi
+    const getFacilityIcon = (fac: string) => {
+        const f = fac.toLowerCase();
+        // Style standar untuk item fasilitas
+        const style = "flex items-center gap-2 text-[10px] uppercase font-bold text-gray-500";
+
+        if (f.includes('wifi') || f.includes('internet')) return <div className={style}><Wifi size={14} className="text-keenan-gold" /> Wifi</div>;
+        if (f.includes('ac') || f.includes('air')) return <div className={style}><Wind size={14} className="text-keenan-gold" /> AC</div>;
+        if (f.includes('break') || f.includes('kitchen') || f.includes('pantry')) return <div className={style}><Utensils size={14} className="text-keenan-gold" /> Kitchen/Pantry</div>;
+        if (f.includes('tv') || f.includes('netflix')) return <div className={style}><Tv size={14} className="text-keenan-gold" /> TV/Netflix</div>;
+        if (f.includes('park')) return <div className={style}><Car size={14} className="text-keenan-gold" /> Parking</div>;
+        if (f.includes('coffee')) return <div className={style}><Coffee size={14} className="text-keenan-gold" /> Coffee</div>;
+
+        // Default Icon
+        return <div className={style}><ShieldCheck size={14} className="text-keenan-gold" /> {fac}</div>;
+    }
+
     return (
-        <div className="min-h-screen bg-keenan-cream font-sans text-keenan-dark">
-            {/* --- HERO SECTION --- */}
-            <div className="relative h-[60vh] bg-keenan-dark flex items-center justify-center">
-                {/* Background Image Overlay */}
-                <div className="absolute inset-0 opacity-40 bg-[url('https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=2070')] bg-cover bg-center" />
+        <div className="font-sans text-gray-800">
 
-                <div className="relative z-10 text-center px-4">
-                    <h1 className="text-4xl md:text-6xl font-serif text-keenan-white mb-4 tracking-wider">
-                        KEENAN LIVING
-                    </h1>
-                    <p className="text-keenan-gray text-lg md:text-xl font-light tracking-widest uppercase">
-                        Experience Comfort & Luxury
-                    </p>
+            {/* --- NAVBAR (Transparent & Sticky) --- */}
+            <nav className="absolute top-0 left-0 w-full z-50 p-6 flex justify-between items-center text-white">
+                <div className="flex items-center gap-2">
+                    <div className="text-2xl font-bold font-serif tracking-widest">KEENAN <span className="font-light">Living</span></div>
                 </div>
-            </div>
+                <div className="hidden md:flex gap-8 text-sm font-bold uppercase tracking-widest">
+                    <a href="#" className="hover:text-keenan-gold transition-colors">About Us</a>
+                    <a href="#properties" className="hover:text-keenan-gold transition-colors">Properties</a>
+                    <a href="#facilities" className="hover:text-keenan-gold transition-colors">Facilities</a>
+                    <a href="#contact" className="hover:text-keenan-gold transition-colors">Contact</a>
+                </div>
+                <button onClick={() => navigate('/admin/login')} className="bg-keenan-gold text-white px-6 py-2 rounded font-bold text-xs hover:bg-white hover:text-keenan-gold transition-all">
+                    LOGIN
+                </button>
+            </nav>
 
-            {/* --- SEARCH WIDGET (Floating) --- */}
-            <div className="relative -mt-16 z-20 container mx-auto px-4">
-                <div className="bg-white p-6 md:p-8 rounded shadow-xl border-t-4 border-keenan-gold grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-
-                    {/* Check In */}
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Check In</label>
-                        <div className="flex items-center border border-gray-200 p-3 rounded bg-gray-50">
-                            <Calendar size={18} className="text-keenan-gold mr-2" />
-                            <input
-                                type="date"
-                                className="bg-transparent outline-none w-full text-sm"
-                                onChange={(e) => setSearchParams({ ...searchParams, checkIn: e.target.value })}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Check Out */}
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Check Out</label>
-                        <div className="flex items-center border border-gray-200 p-3 rounded bg-gray-50">
-                            <Calendar size={18} className="text-keenan-gold mr-2" />
-                            <input
-                                type="date"
-                                className="bg-transparent outline-none w-full text-sm"
-                                onChange={(e) => setSearchParams({ ...searchParams, checkOut: e.target.value })}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Guests */}
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Guests</label>
-                        <div className="flex items-center border border-gray-200 p-3 rounded bg-gray-50">
-                            <Users size={18} className="text-keenan-gold mr-2" />
-                            <select
-                                className="bg-transparent outline-none w-full text-sm"
-                                onChange={(e) => setSearchParams({ ...searchParams, guests: parseInt(e.target.value) })}
-                            >
-                                {[1, 2, 3, 4, 5, 6].map(num => <option key={num} value={num}>{num} Guest(s)</option>)}
-                            </select>
-                        </div>
-                    </div>
-
-                    {/* Button */}
-                    <button className="bg-keenan-gold hover:bg-[#b08d55] text-white p-3 rounded font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 h-[46px]">
-                        <Search size={18} /> Check Availability
+            {/* --- HERO SECTION --- */}
+            <div className="relative h-[85vh] w-full bg-gray-900">
+                <img
+                    src="https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=2070"
+                    className="w-full h-full object-cover opacity-60"
+                    alt="Hero"
+                />
+                <div className="absolute inset-0 flex flex-col justify-center items-center text-center text-white p-4">
+                    <p className="text-sm md:text-base uppercase tracking-[0.3em] mb-4 opacity-90 animate-in slide-in-from-bottom-4">Welcome to Keenan Living</p>
+                    <h1 className="text-4xl md:text-7xl font-serif font-bold mb-6 max-w-4xl leading-tight animate-in slide-in-from-bottom-8 duration-700">
+                        Discover the Ideal Getaway <br /> You've Always Imagined
+                    </h1>
+                    <button onClick={() => document.getElementById('search-bar')?.scrollIntoView({ behavior: 'smooth' })} className="mt-8 bg-transparent border-2 border-white px-8 py-3 text-sm font-bold uppercase tracking-widest hover:bg-white hover:text-black transition-all">
+                        View All Properties
                     </button>
                 </div>
+
+                {/* --- SEARCH BAR (Floating) --- */}
+                <div id="search-bar" className="absolute -bottom-16 left-0 right-0 container mx-auto px-4 z-40">
+                    <div className="bg-white p-6 shadow-2xl flex flex-col md:flex-row gap-4 items-end justify-between max-w-6xl mx-auto rounded-sm border-t-4 border-keenan-gold">
+
+                        <div className="flex-1 w-full">
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Property</label>
+                            <select
+                                className="w-full p-3 bg-gray-50 border-b-2 border-transparent focus:border-keenan-gold outline-none font-serif text-lg"
+                                value={selectedProp}
+                                onChange={e => setSelectedProp(e.target.value)}
+                            >
+                                <option value="">Select Destination</option>
+                                {properties.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                            </select>
+                        </div>
+
+                        <div className="flex-1 w-full">
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Check-In</label>
+                            <input type="date" className="w-full p-3 bg-gray-50 outline-none font-serif text-lg"
+                                onChange={e => setCheckIn(e.target.value)} />
+                        </div>
+
+                        <div className="flex-1 w-full">
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Check-Out</label>
+                            <input type="date" className="w-full p-3 bg-gray-50 outline-none font-serif text-lg"
+                                onChange={e => setCheckOut(e.target.value)} />
+                        </div>
+
+                        <div className="w-32">
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Guests</label>
+                            <select className="w-full p-3 bg-gray-50 outline-none font-serif text-lg" onChange={e => setGuests(parseInt(e.target.value))}>
+                                {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n} Person</option>)}
+                            </select>
+                        </div>
+
+                        <button
+                            onClick={handleSearch}
+                            className="bg-keenan-gold text-white px-8 py-4 h-full font-bold uppercase tracking-widest hover:bg-keenan-dark transition-all w-full md:w-auto"
+                        >
+                            Find Rooms
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            {/* --- PROPERTY LIST --- */}
-            <div className="container mx-auto px-4 py-16">
-                <h2 className="text-2xl font-serif text-center mb-10">Our Properties</h2>
+            {/* --- PROPERTIES GRID --- */}
+            <div id="properties" className="pt-32 pb-20 bg-[#FAFAFA]">
+                <div className="container mx-auto px-4 max-w-7xl">
+                    <div className="text-center mb-16">
+                        <p className="text-keenan-gold text-xs font-bold uppercase tracking-[0.2em] mb-3">Our Properties</p>
+                        <h2 className="text-4xl font-serif font-bold text-keenan-dark">Your Top Destination Vacation Home</h2>
+                    </div>
 
-                {loading ? (
-                    <p className="text-center text-gray-500">Loading properties...</p>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                         {properties.map((prop) => (
-                            <div key={prop.id} className="bg-white rounded overflow-hidden shadow-md hover:shadow-xl transition-shadow group">
-                                <div className="h-64 overflow-hidden relative">
-                                    {/* Fallback Image kalau null */}
+                            <div key={prop.id} className="group cursor-pointer bg-white flex flex-col shadow-sm hover:shadow-xl transition-shadow duration-300" onClick={() => navigate(`/property/${prop.id}`)}>
+                                <div className="h-72 overflow-hidden relative">
                                     <img
-                                        src={prop.image_url || "https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=2070"}
+                                        src={prop.image_url}
                                         alt={prop.name}
                                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                                     />
-                                    <div className="absolute bottom-0 left-0 bg-black/50 text-white px-4 py-2 flex items-center text-xs">
-                                        <MapPin size={14} className="mr-1 text-keenan-gold" /> {prop.address}
-                                    </div>
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                                    <button className="absolute bottom-4 right-4 bg-white/90 p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all translate-y-4 group-hover:translate-y-0 shadow-lg">
+                                        <ArrowRight size={20} />
+                                    </button>
                                 </div>
 
-                                <div className="p-6">
-                                    <h3 className="text-xl font-bold mb-2">{prop.name}</h3>
-                                    <p className="text-gray-500 text-sm mb-4 line-clamp-2">{prop.description || "Nikmati kenyamanan menginap terbaik bersama Keenan Living."}</p>
+                                <div className="p-6 flex-1 flex flex-col">
+                                    <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-2 font-bold">{prop.address?.split(',')[0]}</p>
+                                    <h3 className="text-xl font-serif font-bold text-keenan-dark mb-4 group-hover:text-keenan-gold transition-colors">{prop.name}</h3>
 
-                                    <button
-                                        onClick={() => navigate(`/property/${prop.id}?checkIn=${searchParams.checkIn}&checkOut=${searchParams.checkOut}&guests=${searchParams.guests}`)}
-                                        className="w-full border border-keenan-dark text-keenan-dark hover:bg-keenan-dark hover:text-white py-3 px-4 rounded transition-all text-sm uppercase font-bold tracking-widest"
-                                    >
-                                        View Rooms
-                                    </button>
+                                    {/* PERBAIKAN LOGIKA 3: Render Fasilitas dari Database */}
+                                    <div className="mt-auto pt-4 border-t border-gray-100 grid grid-cols-2 gap-y-2">
+                                        {prop.room_types && prop.room_types.length > 0 && prop.room_types[0].facilities ? (
+                                            prop.room_types[0].facilities.slice(0, 4).map((fac: string, idx: number) => (
+                                                <div key={idx}>
+                                                    {getFacilityIcon(fac)}
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <span className="text-xs text-gray-400 italic col-span-2">Standard Facilities</span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         ))}
                     </div>
-                )}
-
-                {/* Empty State kalau database masih kosong */}
-                {!loading && properties.length === 0 && (
-                    <div className="text-center p-10 bg-white rounded border border-dashed border-gray-300">
-                        <p className="text-gray-400">Belum ada properti yang diinput di Database.</p>
-                        <p className="text-xs text-keenan-gold mt-2">Silakan insert data dummy di SQL Editor Supabase.</p>
-                    </div>
-                )}
+                </div>
             </div>
+
+            {/* --- FACILITIES SECTION --- */}
+            <div id="facilities" className="py-20 bg-white">
+                <div className="container mx-auto px-4 max-w-5xl text-center">
+                    <p className="text-keenan-gold text-xs font-bold uppercase tracking-[0.2em] mb-3">Our Facilities</p>
+                    <h2 className="text-4xl font-serif font-bold text-keenan-dark mb-16">Where Comfort Meets Convenience</h2>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-12 text-left">
+                        <div className="flex gap-6">
+                            <div className="text-4xl font-thin text-gray-300">01</div>
+                            <div>
+                                <h3 className="font-serif font-bold text-xl mb-3">Cozy Bedroom</h3>
+                                <p className="text-gray-500 leading-relaxed text-sm">Designed to provide maximum comfort, featuring plush Queen-sized beds, soft linens, and ambient lighting.</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-6">
+                            <div className="text-4xl font-thin text-gray-300">02</div>
+                            <div>
+                                <h3 className="font-serif font-bold text-xl mb-3">Modern Kitchen</h3>
+                                <p className="text-gray-500 leading-relaxed text-sm">Equipped with the latest appliances and ergonomic design for your cooking convenience.</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-6">
+                            <div className="text-4xl font-thin text-gray-300">03</div>
+                            <div>
+                                <h3 className="font-serif font-bold text-xl mb-3">TV & Netflix</h3>
+                                <p className="text-gray-500 leading-relaxed text-sm">Extensive selection of entertainment channels to enhance your relaxation time.</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-6">
+                            <div className="text-4xl font-thin text-gray-300">04</div>
+                            <div>
+                                <h3 className="font-serif font-bold text-xl mb-3">Spacious Parking</h3>
+                                <p className="text-gray-500 leading-relaxed text-sm">Secure environment ensuring your vehicle is well-protected with ample space.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* --- FOOTER (Black) --- */}
+            <footer id="contact" className="bg-black text-white py-20 border-t border-gray-900">
+                <div className="container mx-auto px-4 max-w-7xl grid grid-cols-1 md:grid-cols-4 gap-12">
+                    <div className="col-span-1 md:col-span-2">
+                        <div className="text-3xl font-bold font-serif tracking-widest mb-6">KEENAN <span className="font-light">Living</span></div>
+                        <p className="text-gray-400 text-sm leading-relaxed max-w-md mb-6">
+                            Jl. Seturan Raya, Gg. Asrama UKDW, Ngropoh, Condongcatur, Kec. Depok, Kabupaten Sleman, DIY 55281
+                        </p>
+                        <p className="text-keenan-gold font-bold flex items-center gap-2"><MapPin size={16} /> View on Google Maps</p>
+                    </div>
+
+                    <div>
+                        <h4 className="font-bold uppercase tracking-widest mb-6 text-sm">Quick Links</h4>
+                        <ul className="space-y-4 text-gray-400 text-sm">
+                            <li><a href="#" className="hover:text-white transition-colors">About Us</a></li>
+                            <li><a href="#" className="hover:text-white transition-colors">Properties</a></li>
+                            <li><a href="#" className="hover:text-white transition-colors">Facilities</a></li>
+                            <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h4 className="font-bold uppercase tracking-widest mb-6 text-sm">Follow Us</h4>
+                        <div className="flex gap-4">
+                            <div className="w-10 h-10 border border-gray-700 rounded-full flex items-center justify-center hover:bg-white hover:text-black transition-all cursor-pointer">IG</div>
+                            <div className="w-10 h-10 border border-gray-700 rounded-full flex items-center justify-center hover:bg-white hover:text-black transition-all cursor-pointer">TK</div>
+                        </div>
+                    </div>
+                </div>
+                <div className="container mx-auto px-4 mt-20 pt-8 border-t border-gray-900 text-center text-xs text-gray-600">
+                    &copy; 2026 Keenan Living Group. All rights reserved.
+                </div>
+            </footer>
+
         </div>
     );
-};
-
-export default BookingSearch;
+}
