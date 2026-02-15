@@ -4,6 +4,7 @@ import PropertyDetails from './pages/booking/PropertyDetails';
 import BookingPage from './pages/booking/BookingPage';
 import AdminLogin from './pages/admin/Login';
 import AdminDashboard from './pages/admin/Dashboard';
+import CalendarPage from './pages/admin/CalenderPage';
 
 const NotFound = () => <div className="p-10 text-center">404 - Halaman Tidak Ditemukan</div>;
 
@@ -44,6 +45,15 @@ function App() {
         />
 
         <Route path="*" element={<NotFound />} />
+
+        <Route
+          path="/admin/calendar"
+          element={
+            <ProtectedRoute>
+              <CalendarPage />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );

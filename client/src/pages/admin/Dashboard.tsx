@@ -16,20 +16,19 @@ export default function AdminDashboard() {
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
-        // 1. Ambil data admin dari localStorage
         const name = localStorage.getItem('keenan_admin_name') || 'Admin';
         const adminScope = localStorage.getItem('keenan_admin_scope') || 'all';
 
         setAdminName(name);
         setScope(adminScope);
 
-        // 2. Ambil data booking
         fetchBookings(adminScope);
     }, []);
 
     const fetchBookings = async (adminScope: string) => {
         setLoading(true);
         try {
+            // Ambil semua data dulu, nanti kita filter 'cerdas' pakai Javascript
             let query = supabase
                 .from('bookings')
                 .select(`
@@ -39,24 +38,25 @@ export default function AdminDashboard() {
                 `)
                 .order('created_at', { ascending: false });
 
-            // FILTER LOGIC: Jika bukan 'all', filter berdasarkan nama properti atau ID
-            // Sesuaikan dengan logic di Login.tsx kamu
-            if (adminScope && adminScope !== 'all') {
-                // Mencari booking yang memiliki relasi ke nama property yang sesuai scope
-                query = query.filter('properties.name', 'eq', adminScope);
-            }
-
             const { data, error } = await query;
 
             if (error) throw error;
 
-            // Karena Supabase .filter pada join table kadang mengembalikan data null untuk join-nya,
-            // kita bersihkan datanya di sini (client-side filter sebagai pengaman)
-            const cleanedData = adminScope !== 'all'
-                ? (data || []).filter(b => b.properties && b.properties.name === adminScope)
-                : (data || []);
+            // --- LOGIC FILTER PINTAR (Partial Match) ---
+            const allBookings = data || [];
 
-            setBookings(cleanedData);
+            const filteredData = allBookings.filter(booking => {
+                // 1. Kalau Superadmin ('all'), ambil semua
+                if (adminScope === 'all') return true;
+
+                // 2. Cek apakah nama properti mengandung kata kunci scope
+                // Contoh: "Keenan Luxe Seturan" mengandung "Luxe Seturan" -> TRUE
+                const propertyName = booking.properties?.name || '';
+                return propertyName.toLowerCase().includes(adminScope.toLowerCase());
+            });
+
+            setBookings(filteredData);
+
         } catch (error) {
             console.error("Error fetching bookings:", error);
         } finally {
@@ -88,18 +88,21 @@ export default function AdminDashboard() {
         }
     };
 
-    // Filter by Status & Search Term
-    const filteredBookings = bookings.filter(b => {
+    // Filter by Status & Search Term (Client Side)
+    const displayBookings = bookings.filter(b => {
         const matchesStatus = filter === 'all' || b.status === filter;
-        const matchesSearch = b.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            b.booking_code.toLowerCase().includes(searchTerm.toLowerCase());
+        const searchLower = searchTerm.toLowerCase();
+        const matchesSearch =
+            (b.customer_name?.toLowerCase() || '').includes(searchLower) ||
+            (b.booking_code?.toLowerCase() || '').includes(searchLower);
+
         return matchesStatus && matchesSearch;
     });
 
     if (loading) return (
         <div className="h-screen flex flex-col items-center justify-center bg-gray-50 text-keenan-gold">
             <Loader2 className="animate-spin mb-4" size={40} />
-            <p className="font-serif italic tracking-widest">Loading Keenan Management System...</p>
+            <p className="font-serif italic tracking-widest">Memuat Data Dashboard...</p>
         </div>
     );
 
@@ -107,7 +110,7 @@ export default function AdminDashboard() {
         <div className="min-h-screen bg-gray-50 flex font-sans text-gray-800">
 
             {/* SIDEBAR */}
-            <div className="w-64 bg-keenan-dark text-white p-6 hidden md:block fixed h-full shadow-2xl">
+            <div className="w-64 bg-keenan-dark text-white p-6 hidden md:block fixed h-full shadow-2xl z-10">
                 <div className="mb-12">
                     <h2 className="text-2xl font-serif font-bold text-keenan-gold tracking-tighter">KEENAN</h2>
                     <p className="text-[10px] tracking-[0.3em] uppercase opacity-50">Living Group</p>
@@ -117,7 +120,10 @@ export default function AdminDashboard() {
                     <button className="w-full flex items-center gap-3 bg-keenan-gold/10 text-keenan-gold p-3 rounded-lg font-bold transition-all border-l-4 border-keenan-gold">
                         <LayoutDashboard size={20} /> Dashboard
                     </button>
-                    <button className="w-full flex items-center gap-3 hover:bg-white/5 p-3 rounded-lg text-gray-400 transition-all">
+                    <button
+                        onClick={() => navigate('/admin/calendar')}
+                        className="w-full flex items-center gap-3 hover:bg-white/5 p-3 rounded-lg text-gray-400 transition-all"
+                    >
                         <Calendar size={20} /> Calendar
                     </button>
                 </nav>
@@ -227,7 +233,7 @@ export default function AdminDashboard() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
-                                {filteredBookings.length > 0 ? filteredBookings.map((booking) => (
+                                {displayBookings.length > 0 ? displayBookings.map((booking) => (
                                     <tr key={booking.id} className="hover:bg-keenan-cream/20 transition-colors group">
                                         <td className="p-6">
                                             <span className="font-mono font-bold text-keenan-dark bg-gray-100 px-3 py-1 rounded-md group-hover:bg-keenan-gold group-hover:text-white transition-colors">
