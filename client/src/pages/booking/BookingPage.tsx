@@ -49,19 +49,44 @@ export default function BookingPage() {
         setIsChecking(true);
         setAvailabilityStatus('idle');
 
-        const { data } = await supabase
-            .from('bookings')
-            .select('id')
-            .eq('room_type_id', room.id)
-            .neq('status', 'cancelled')
-            .or(`and(check_in_date.lt.${outDate},check_out_date.gt.${inDate})`);
+        try {
+            // 1. Ambil Info Stok Kamar ini dulu
+            const { data: roomData } = await supabase
+                .from('room_types')
+                .select('total_stock')
+                .eq('id', room.id)
+                .single();
 
-        if (data && data.length > 0) {
-            setAvailabilityStatus('unavailable');
-        } else {
-            setAvailabilityStatus('available');
+            const maxStock = roomData?.total_stock || 1; // Default 1 kalau error
+
+            // 2. Hitung berapa orang yang SUDAH booking di tanggal yang bertabrakan
+            const { count, error } = await supabase
+                .from('bookings')
+                .select('id', { count: 'exact', head: true }) // Cuma butuh jumlahnya (count)
+                .eq('room_type_id', room.id)
+                .neq('status', 'cancelled') // Yang cancel gak dihitung
+                // Rumus Tabrakan Tanggal (Overlap Logic)
+                .or(`and(check_in_date.lt.${outDate},check_out_date.gt.${inDate})`);
+
+            if (error) throw error;
+
+            const bookedCount = count || 0;
+
+            console.log(`Stok: ${maxStock}, Terpakai: ${bookedCount}`);
+
+            // 3. Bandingkan
+            if (bookedCount >= maxStock) {
+                setAvailabilityStatus('unavailable'); // Yah, penuh :(
+            } else {
+                setAvailabilityStatus('available'); // Masih ada sisa! :)
+            }
+
+        } catch (err) {
+            console.error("Cek ketersediaan error:", err);
+            alert("Gagal mengecek ketersediaan kamar.");
+        } finally {
+            setIsChecking(false);
         }
-        setIsChecking(false);
     };
 
     const calculateTotal = () => {
@@ -355,7 +380,7 @@ export default function BookingPage() {
                                         : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                                         }`}
                                 >
-                                    {loading ? <Loader2 className="animate-spin" /> : "Secure Checkout 🔒"}
+                                    {loading ? <Loader2 className="animate-spin" /> : "Book Now"}
                                 </button>
 
                                 <p className="text-[10px] text-center text-gray-400 mt-4">
