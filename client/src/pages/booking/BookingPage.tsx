@@ -160,7 +160,7 @@ export default function BookingPage() {
                                 customer_email: formData.email,
                                 customer_phone: formData.phone,
                                 customer_notes: formData.notes, // Simpan Notes
-                                booking_source: 'Website',
+                                booking_source: 'website',
                                 payment_method: result.payment_type
                             }])
                             .select()
