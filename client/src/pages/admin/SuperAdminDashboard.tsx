@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import {
-    LayoutDashboard, LogOut, Hotel, BedDouble, Users,
+    LayoutDashboard, LogOut, Hotel, BedDouble, Users, BookOpen,
     Plus, Trash2, Edit, X, Loader2, ShieldCheck, UploadCloud,
-    TrendingUp, Wallet, UserCheck, Filter, Globe
+    TrendingUp, Wallet, UserCheck, Filter, Globe, Calendar,
+    CheckCircle, Mail, Phone, MapPin, Printer, CreditCard
 } from 'lucide-react';
 
 // --- 1. CHART GARIS (REVENUE) ---
@@ -78,7 +79,7 @@ const SimpleBarChart = ({ data, labels }: { data: number[], labels: string[] }) 
 
 export default function SuperAdminDashboard() {
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState<'overview' | 'properties' | 'rooms' | 'staff'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'bookings' | 'properties' | 'rooms' | 'staff'>('overview');
 
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
@@ -100,7 +101,7 @@ export default function SuperAdminDashboard() {
 
     // Form States
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [modalType, setModalType] = useState<'property' | 'room' | 'staff' | ''>('');
+    const [modalType, setModalType] = useState<'property' | 'room' | 'staff' | 'booking_detail' | ''>('');
     const [editingId, setEditingId] = useState<string | null>(null);
     const [formData, setFormData] = useState<any>({});
     const [imageFile, setImageFile] = useState<File | null>(null);
@@ -133,8 +134,8 @@ export default function SuperAdminDashboard() {
 
             const { data: bookingData } = await supabase
                 .from('bookings')
-                .select(`id, total_price, check_in_date, booking_source, status, properties ( id, name )`)
-                .in('status', ['paid', 'checked_in', 'checked_out']);
+                .select(`*, properties ( id, name ), room_types ( name )`)
+                .order('created_at', { ascending: false });
 
             setProperties(props || []);
             setRooms(roomData || []);
@@ -149,8 +150,10 @@ export default function SuperAdminDashboard() {
     };
 
     const calculateAnalytics = () => {
+        const validStatuses = ['paid', 'checked_in', 'checked_out', 'confirmed'];
         const filteredBookings = rawBookings.filter(b =>
-            selectedPropertyFilter === 'all' || b.properties?.id === selectedPropertyFilter
+            (selectedPropertyFilter === 'all' || b.properties?.id === selectedPropertyFilter) &&
+            validStatuses.includes(b.status)
         );
 
         const totalRevenue = filteredBookings.reduce((acc, curr) => acc + (curr.total_price || 0), 0);
@@ -170,15 +173,11 @@ export default function SuperAdminDashboard() {
             channels[source] = (channels[source] || 0) + 1;
         });
 
-        if (Object.keys(channels).length === 0) {
-            // channels['No Data'] = 0; 
-        }
-
         const channelLabels = Object.keys(channels);
         const channelData = Object.values(channels);
 
         const propPerformance: Record<string, number> = {};
-        rawBookings.forEach(b => {
+        filteredBookings.forEach(b => {
             const pName = b.properties?.name || 'Unknown';
             propPerformance[pName] = (propPerformance[pName] || 0) + (b.total_price || 0);
         });
@@ -187,15 +186,15 @@ export default function SuperAdminDashboard() {
             .slice(0, 5);
 
         setAnalytics({
-            totalRevenue,
-            totalBookings,
-            monthlyRevenue: months,
+            totalRevenue, totalBookings, monthlyRevenue: months,
             channelStats: { labels: channelLabels, data: channelData },
             topProperties: sortedProps
         });
     };
 
     const formatRupiah = (price: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(price);
+    const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
     const uploadImage = async (file: File) => {
         const fileExt = file.name.split('.').pop();
         const fileName = `${Date.now()}.${fileExt}`;
@@ -262,6 +261,7 @@ export default function SuperAdminDashboard() {
                 </div>
                 <nav className="space-y-2">
                     <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${activeTab === 'overview' ? 'bg-keenan-gold text-keenan-dark font-bold' : 'text-gray-400 hover:bg-white/5'}`}><LayoutDashboard size={18} /> Dashboard</button>
+                    <button onClick={() => setActiveTab('bookings')} className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${activeTab === 'bookings' ? 'bg-white/10 text-white font-bold' : 'text-gray-400 hover:bg-white/5'}`}><BookOpen size={18} /> Bookings</button>
                     <button onClick={() => setActiveTab('properties')} className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${activeTab === 'properties' ? 'bg-white/10 text-white font-bold' : 'text-gray-400 hover:bg-white/5'}`}><Hotel size={18} /> Properties</button>
                     <button onClick={() => setActiveTab('rooms')} className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${activeTab === 'rooms' ? 'bg-white/10 text-white font-bold' : 'text-gray-400 hover:bg-white/5'}`}><BedDouble size={18} /> Rooms</button>
                     <button onClick={() => setActiveTab('staff')} className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${activeTab === 'staff' ? 'bg-white/10 text-white font-bold' : 'text-gray-400 hover:bg-white/5'}`}><Users size={18} /> Staff</button>
@@ -320,7 +320,46 @@ export default function SuperAdminDashboard() {
                     </div>
                 )}
 
-                {/* --- TAB 2: MANAGE PROPERTIES --- */}
+                {/* --- TAB 2: BOOKINGS LIST --- */}
+                {activeTab === 'bookings' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4">
+                        <div className="flex justify-between items-end mb-8">
+                            <div><h1 className="text-4xl font-serif font-bold text-keenan-dark">All Bookings</h1><p className="text-gray-400 text-sm mt-1">Monitoring pesanan masuk dari semua cabang hotel.</p></div>
+                            <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-200 flex items-center gap-2">
+                                <Filter size={16} className="text-gray-400 ml-2" />
+                                <select className="bg-transparent font-bold text-sm text-keenan-dark outline-none cursor-pointer pr-4" value={selectedPropertyFilter} onChange={(e) => setSelectedPropertyFilter(e.target.value)}>
+                                    <option value="all">All Properties</option>
+                                    {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-gray-50 text-gray-400 uppercase text-[10px] font-bold">
+                                    <tr><th className="p-4 pl-6">Booking Ref</th><th className="p-4">Guest Name</th><th className="p-4">Hotel & Room</th><th className="p-4">Check-In / Out</th><th className="p-4">Status</th><th className="p-4 text-right pr-6">Total Price</th></tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {rawBookings
+                                        .filter(b => selectedPropertyFilter === 'all' || b.properties?.id === selectedPropertyFilter)
+                                        .map((booking) => (
+                                            <tr key={booking.id} onClick={() => openModal('booking_detail', booking)} className="hover:bg-gray-50 transition-colors cursor-pointer group">
+                                                <td className="p-4 pl-6"><span className="font-mono font-bold text-keenan-gold group-hover:underline">{booking.booking_code || '-'}</span><div className="text-[10px] text-gray-400 mt-1">{new Date(booking.created_at).toLocaleDateString()}</div></td>
+                                                <td className="p-4"><p className="font-bold text-gray-700">{booking.customer_name || 'Guest'}</p><p className="text-xs text-gray-400">{booking.customer_phone || '-'}</p></td>
+                                                <td className="p-4"><p className="font-bold text-keenan-dark text-xs">{booking.properties?.name}</p><p className="text-xs text-gray-500">{booking.room_types?.name}</p></td>
+                                                <td className="p-4"><div className="flex items-center gap-2 text-xs font-medium text-gray-600"><Calendar size={14} className="text-gray-300" />{formatDate(booking.check_in_date)}</div><div className="flex items-center gap-2 text-xs font-medium text-gray-600 mt-1"><span className="w-3.5"></span>{formatDate(booking.check_out_date)}</div></td>
+                                                <td className="p-4"><span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${booking.status === 'paid' || booking.status === 'confirmed' ? 'bg-green-50 text-green-600 border-green-200' : booking.status === 'checked_in' ? 'bg-blue-50 text-blue-600 border-blue-200' : booking.status === 'cancelled' ? 'bg-red-50 text-red-600 border-red-200' : 'bg-yellow-50 text-yellow-600 border-yellow-200'}`}>{booking.status || 'Pending'}</span></td>
+                                                <td className="p-4 pr-6 text-right font-bold text-gray-700">{formatRupiah(booking.total_price)}</td>
+                                            </tr>
+                                        ))}
+                                    {rawBookings.length === 0 && (<tr><td colSpan={6} className="p-8 text-center text-gray-400 italic">No bookings found.</td></tr>)}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- TAB 3: MANAGE PROPERTIES --- */}
                 {activeTab === 'properties' && (
                     <div className="animate-in fade-in slide-in-from-bottom-4">
                         <div className="flex justify-between items-center mb-8"><h2 className="text-2xl font-serif font-bold text-keenan-dark">Manage Properties</h2><button onClick={() => openModal('property')} className="bg-keenan-dark text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-black"><Plus size={18} /> Add New Hotel</button></div>
@@ -335,46 +374,25 @@ export default function SuperAdminDashboard() {
                     </div>
                 )}
 
-                {/* --- TAB 3: MANAGE ROOMS (INI YANG KEMARIN HILANG) --- */}
+                {/* --- TAB 4: MANAGE ROOMS --- */}
                 {activeTab === 'rooms' && (
                     <div className="animate-in fade-in slide-in-from-bottom-4">
                         <div className="flex justify-between items-center mb-8">
                             <h2 className="text-2xl font-serif font-bold text-keenan-dark">Rooms & Pricing</h2>
                             <button onClick={() => openModal('room')} className="bg-keenan-dark text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-black"><Plus size={18} /> Add Room Type</button>
                         </div>
-
                         {properties.map(prop => {
                             const hotelRooms = rooms.filter(r => r.property_id === prop.id);
                             if (hotelRooms.length === 0) return null;
-
                             return (
                                 <div key={prop.id} className="mb-8">
                                     <h3 className="text-lg font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Hotel size={18} /> {prop.name}</h3>
                                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                                         <table className="w-full text-left text-sm">
-                                            <thead className="bg-gray-50 text-gray-400 uppercase text-[10px] font-bold">
-                                                <tr>
-                                                    <th className="p-4 pl-6">Room Name</th>
-                                                    <th className="p-4">Capacity</th>
-                                                    <th className="p-4">Stock</th>
-                                                    <th className="p-4">Base Price</th>
-                                                    <th className="p-4 text-right pr-6">Actions</th>
-                                                </tr>
-                                            </thead>
+                                            <thead className="bg-gray-50 text-gray-400 uppercase text-[10px] font-bold"><tr><th className="p-4 pl-6">Room Name</th><th className="p-4">Capacity</th><th className="p-4">Stock</th><th className="p-4">Base Price</th><th className="p-4 text-right pr-6">Actions</th></tr></thead>
                                             <tbody className="divide-y divide-gray-50">
                                                 {hotelRooms.map(room => (
-                                                    <tr key={room.id} className="hover:bg-gray-50">
-                                                        <td className="p-4 pl-6 font-bold text-keenan-dark">{room.name}</td>
-                                                        <td className="p-4 text-gray-500">{room.capacity} Person</td>
-                                                        <td className="p-4 text-blue-600 font-bold">{room.total_stock} Unit</td>
-                                                        <td className="p-4 font-bold text-keenan-dark">{formatRupiah(room.base_price)}</td>
-                                                        <td className="p-4 pr-6 text-right">
-                                                            <div className="flex justify-end gap-2">
-                                                                <button onClick={() => openModal('room', room)} className="text-blue-400 hover:text-blue-600 p-2"><Edit size={18} /></button>
-                                                                <button onClick={() => handleDelete('room_types', room.id)} className="text-red-400 hover:text-red-600 p-2"><Trash2 size={18} /></button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
+                                                    <tr key={room.id} className="hover:bg-gray-50"><td className="p-4 pl-6 font-bold text-keenan-dark">{room.name}</td><td className="p-4 text-gray-500">{room.capacity} Person</td><td className="p-4 text-blue-600 font-bold">{room.total_stock} Unit</td><td className="p-4 font-bold text-keenan-dark">{formatRupiah(room.base_price)}</td><td className="p-4 pr-6 text-right"><div className="flex justify-end gap-2"><button onClick={() => openModal('room', room)} className="text-blue-400 hover:text-blue-600 p-2"><Edit size={18} /></button><button onClick={() => handleDelete('room_types', room.id)} className="text-red-400 hover:text-red-600 p-2"><Trash2 size={18} /></button></div></td></tr>
                                                 ))}
                                             </tbody>
                                         </table>
@@ -385,7 +403,7 @@ export default function SuperAdminDashboard() {
                     </div>
                 )}
 
-                {/* --- TAB 4: MANAGE STAFF (INI JUGA KEMARIN HILANG) --- */}
+                {/* --- TAB 5: MANAGE STAFF --- */}
                 {activeTab === 'staff' && (
                     <div className="animate-in fade-in slide-in-from-bottom-4">
                         <div className="flex justify-between items-center mb-8">
@@ -402,14 +420,8 @@ export default function SuperAdminDashboard() {
                                             <button onClick={() => handleDelete('admins', admin.id)} className="text-gray-300 hover:text-red-500"><Trash2 size={18} /></button>
                                         </div>
                                     </div>
-                                    <div>
-                                        <h3 className="font-bold text-lg text-keenan-dark">{admin.full_name}</h3>
-                                        <p className="text-sm text-gray-400">{admin.email}</p>
-                                    </div>
-                                    <div className="mt-4 pt-4 border-t border-gray-50 flex justify-between items-center">
-                                        <span className="text-[10px] font-bold text-gray-400 uppercase">Assigned To</span>
-                                        <span className="text-xs font-bold text-keenan-gold bg-keenan-gold/10 px-2 py-1 rounded">{admin.scope === 'all' ? 'All Branches' : admin.scope}</span>
-                                    </div>
+                                    <div><h3 className="font-bold text-lg text-keenan-dark">{admin.full_name}</h3><p className="text-sm text-gray-400">{admin.email}</p></div>
+                                    <div className="mt-4 pt-4 border-t border-gray-50 flex justify-between items-center"><span className="text-[10px] font-bold text-gray-400 uppercase">Assigned To</span><span className="text-xs font-bold text-keenan-gold bg-keenan-gold/10 px-2 py-1 rounded">{admin.scope === 'all' ? 'All Branches' : admin.scope}</span></div>
                                 </div>
                             ))}
                         </div>
@@ -421,11 +433,105 @@ export default function SuperAdminDashboard() {
             {/* MODAL */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-white w-full max-w-lg rounded-3xl p-8 max-h-[90vh] overflow-y-auto">
-                        <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-xl font-serif capitalize">{editingId ? 'Edit' : 'Add New'} {modalType}</h3><button onClick={closeModal}><X /></button></div>
-                        {modalType === 'property' && (<div className="space-y-4"><input placeholder="Hotel Name" value={formData.name || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, name: e.target.value })} /><input placeholder="Address" value={formData.address || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, address: e.target.value })} /><div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-keenan-gold transition-colors"><input type="file" id="propImg" className="hidden" onChange={e => setImageFile(e.target.files?.[0] || null)} /><label htmlFor="propImg" className="cursor-pointer flex flex-col items-center gap-2 text-gray-500"><UploadCloud size={24} /><span className="text-sm font-bold">{imageFile ? imageFile.name : (formData.image_url ? "Change Image" : "Upload Image")}</span></label></div><textarea placeholder="Description" value={formData.description || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, description: e.target.value })} /><button onClick={handleSave} disabled={uploading} className="w-full bg-keenan-gold text-white py-3 rounded-lg font-bold flex justify-center">{uploading ? <Loader2 className="animate-spin" /> : "SAVE PROPERTY"}</button></div>)}
-                        {modalType === 'room' && (<div className="space-y-4"><select className="w-full p-3 border rounded-lg bg-white" value={formData.property_id || ''} onChange={e => setFormData({ ...formData, property_id: e.target.value })}><option>Select Property</option>{properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><input placeholder="Room Name" value={formData.name || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, name: e.target.value })} /><div className="grid grid-cols-3 gap-4"><div className="col-span-2"><input type="number" placeholder="Price (Rp)" value={formData.base_price || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, base_price: e.target.value })} /></div><div><input type="number" placeholder="Cap" value={formData.capacity || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, capacity: e.target.value })} /></div></div><div><input type="number" placeholder="Total Room Stock" value={formData.total_stock || ''} className="w-full p-3 border rounded-lg font-bold" onChange={e => setFormData({ ...formData, total_stock: e.target.value })} /></div><div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-keenan-gold transition-colors"><input type="file" id="roomImg" className="hidden" onChange={e => setImageFile(e.target.files?.[0] || null)} /><label htmlFor="roomImg" className="cursor-pointer flex flex-col items-center gap-2 text-gray-500"><UploadCloud size={24} /><span className="text-sm font-bold">{imageFile ? imageFile.name : (formData.image_url ? "Change Image" : "Upload Image")}</span></label></div><div className="grid grid-cols-2 gap-2">{facilityOptions.map(fac => (<label key={fac} className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={selectedFacilities.includes(fac)} onChange={() => handleFacilityChange(fac)} className="accent-keenan-gold" /> {fac}</label>))}</div><button onClick={handleSave} disabled={uploading} className="w-full bg-keenan-gold text-white py-3 rounded-lg font-bold flex justify-center">{uploading ? <Loader2 className="animate-spin" /> : "SAVE ROOM"}</button></div>)}
-                        {modalType === 'staff' && (<div className="space-y-4"><input placeholder="Full Name" value={formData.full_name || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, full_name: e.target.value })} /><input placeholder="Email" type="email" value={formData.email || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, email: e.target.value })} /><input placeholder="Password" type="password" value={formData.password || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, password: e.target.value })} /><select className="w-full p-3 border rounded-lg bg-white" value={formData.scope || ''} onChange={e => setFormData({ ...formData, scope: e.target.value })}><option value="">-- Assign to Branch --</option>{properties.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}</select><button onClick={handleSave} className="w-full bg-keenan-gold text-white py-3 rounded-lg font-bold">{editingId ? 'UPDATE ACCOUNT' : 'CREATE ACCOUNT'}</button></div>)}
+                    {/* MODAL WRAPPER UNTUK DETAIL BOOKING & FORM */}
+                    <div className={`bg-white w-full ${modalType === 'booking_detail' ? 'max-w-4xl bg-gray-50' : 'max-w-lg'} rounded-3xl p-0 max-h-[95vh] overflow-y-auto shadow-2xl relative transition-all duration-300`}>
+
+                        {/* --- CLOSE BUTTON --- */}
+                        <button onClick={closeModal} className="absolute top-4 right-4 z-10 w-8 h-8 flex items-center justify-center bg-white/50 backdrop-blur hover:bg-white rounded-full transition-all text-gray-500 hover:text-gray-800"><X size={18} /></button>
+
+                        {/* --- CASE 1: DETAIL BOOKING (READ ONLY) --- */}
+                        {modalType === 'booking_detail' && formData && (
+                            <div className="flex flex-col md:flex-row h-full">
+                                {/* KIRI: USER PROFILE */}
+                                <div className="md:w-1/3 bg-white p-8 flex flex-col items-center justify-center border-r border-gray-100 text-center relative overflow-hidden">
+                                    <div className="w-24 h-24 bg-keenan-dark text-keenan-gold text-4xl font-serif font-bold rounded-full flex items-center justify-center mb-4 shadow-xl z-10 border-4 border-white">
+                                        {formData.customer_name?.charAt(0)}
+                                    </div>
+                                    <h3 className="text-xl font-bold text-keenan-dark z-10">{formData.customer_name}</h3>
+                                    <span className="mt-2 px-3 py-1 bg-keenan-gold/10 text-keenan-gold text-[10px] font-bold tracking-widest uppercase rounded-full z-10 border border-keenan-gold/20">
+                                        {formData.booking_source}
+                                    </span>
+
+                                    <div className="w-full mt-8 space-y-4 text-left z-10">
+                                        <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 flex items-center gap-3">
+                                            <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-green-500 shadow-sm"><Phone size={14} /></div>
+                                            <span className="text-sm font-bold text-gray-600">{formData.customer_phone}</span>
+                                        </div>
+                                        <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 flex items-center gap-3">
+                                            <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-blue-500 shadow-sm"><Mail size={14} /></div>
+                                            <span className="text-xs font-bold text-gray-600 truncate">{formData.customer_email}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Hiasan Background */}
+                                    <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-gray-50 to-transparent"></div>
+                                </div>
+
+                                {/* KANAN: BOOKING DETAIL */}
+                                <div className="md:w-2/3 p-8 bg-[#F9FAFB]">
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div>
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Booking ID</p>
+                                            <h2 className="text-lg font-mono font-bold text-keenan-dark">{formData.booking_code}</h2>
+                                            <p className="text-[10px] text-gray-400">{new Date(formData.created_at).toLocaleString()}</p>
+                                        </div>
+                                        <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border flex items-center gap-1 ${formData.status === 'paid' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-yellow-100 text-yellow-700 border-yellow-200'
+                                            }`}>
+                                            {formData.status === 'paid' && <CheckCircle size={12} />}
+                                            {formData.status}
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 mb-6">
+                                        <div className="flex items-start gap-4 mb-6">
+                                            <div className="w-12 h-12 bg-keenan-gold/10 rounded-xl flex items-center justify-center text-keenan-gold shrink-0"><MapPin /></div>
+                                            <div>
+                                                <h4 className="font-bold text-keenan-dark text-lg">{formData.properties?.name}</h4>
+                                                <p className="text-sm text-gray-500">{formData.room_types?.name}</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-100">
+                                            <div>
+                                                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Check-In</p>
+                                                <p className="font-bold text-sm text-gray-700">{formatDate(formData.check_in_date)}</p>
+                                            </div>
+                                            <div className="text-gray-300">➜</div>
+                                            <div className="text-right">
+                                                <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Check-Out</p>
+                                                <p className="font-bold text-sm text-gray-700">{formatDate(formData.check_out_date)}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex justify-between items-center mb-6">
+                                        <div className="flex items-center gap-2 text-gray-500 text-sm font-bold"><CreditCard size={16} /> Total Paid</div>
+                                        <div className="text-2xl font-bold text-keenan-gold">{formatRupiah(formData.total_price)}</div>
+                                    </div>
+
+                                    {formData.customer_notes && (
+                                        <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100 text-sm text-yellow-800 mb-6">
+                                            <span className="font-bold block mb-1 text-[10px] uppercase text-yellow-600">Guest Notes:</span>
+                                            "{formData.customer_notes}"
+                                        </div>
+                                    )}
+
+                                    <button onClick={() => window.print()} className="w-full py-3 bg-white border border-gray-300 hover:bg-gray-50 text-gray-600 font-bold rounded-xl flex items-center justify-center gap-2 transition-all">
+                                        <Printer size={18} /> Print Booking Details
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* --- CASE 2: EDIT FORM (PROPERTY/ROOM/STAFF) --- */}
+                        {modalType !== 'booking_detail' && (
+                            <div className="p-8">
+                                <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-xl font-serif capitalize">{editingId ? 'Edit' : 'Add New'} {modalType}</h3></div>
+                                {modalType === 'property' && (<div className="space-y-4"><input placeholder="Hotel Name" value={formData.name || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, name: e.target.value })} /><input placeholder="Address" value={formData.address || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, address: e.target.value })} /><div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-keenan-gold transition-colors"><input type="file" id="propImg" className="hidden" onChange={e => setImageFile(e.target.files?.[0] || null)} /><label htmlFor="propImg" className="cursor-pointer flex flex-col items-center gap-2 text-gray-500"><UploadCloud size={24} /><span className="text-sm font-bold">{imageFile ? imageFile.name : (formData.image_url ? "Change Image" : "Upload Image")}</span></label></div><textarea placeholder="Description" value={formData.description || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, description: e.target.value })} /><button onClick={handleSave} disabled={uploading} className="w-full bg-keenan-gold text-white py-3 rounded-lg font-bold flex justify-center">{uploading ? <Loader2 className="animate-spin" /> : "SAVE PROPERTY"}</button></div>)}
+                                {modalType === 'room' && (<div className="space-y-4"><select className="w-full p-3 border rounded-lg bg-white" value={formData.property_id || ''} onChange={e => setFormData({ ...formData, property_id: e.target.value })}><option>Select Property</option>{properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><input placeholder="Room Name" value={formData.name || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, name: e.target.value })} /><div className="grid grid-cols-3 gap-4"><div className="col-span-2"><input type="number" placeholder="Price (Rp)" value={formData.base_price || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, base_price: e.target.value })} /></div><div><input type="number" placeholder="Cap" value={formData.capacity || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, capacity: e.target.value })} /></div></div><div><input type="number" placeholder="Total Room Stock" value={formData.total_stock || ''} className="w-full p-3 border rounded-lg font-bold" onChange={e => setFormData({ ...formData, total_stock: e.target.value })} /></div><div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-keenan-gold transition-colors"><input type="file" id="roomImg" className="hidden" onChange={e => setImageFile(e.target.files?.[0] || null)} /><label htmlFor="roomImg" className="cursor-pointer flex flex-col items-center gap-2 text-gray-500"><UploadCloud size={24} /><span className="text-sm font-bold">{imageFile ? imageFile.name : (formData.image_url ? "Change Image" : "Upload Image")}</span></label></div><div className="grid grid-cols-2 gap-2">{facilityOptions.map(fac => (<label key={fac} className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={selectedFacilities.includes(fac)} onChange={() => handleFacilityChange(fac)} className="accent-keenan-gold" /> {fac}</label>))}</div><button onClick={handleSave} disabled={uploading} className="w-full bg-keenan-gold text-white py-3 rounded-lg font-bold flex justify-center">{uploading ? <Loader2 className="animate-spin" /> : "SAVE ROOM"}</button></div>)}
+                                {modalType === 'staff' && (<div className="space-y-4"><input placeholder="Full Name" value={formData.full_name || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, full_name: e.target.value })} /><input placeholder="Email" type="email" value={formData.email || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, email: e.target.value })} /><input placeholder="Password" type="password" value={formData.password || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, password: e.target.value })} /><select className="w-full p-3 border rounded-lg bg-white" value={formData.scope || ''} onChange={e => setFormData({ ...formData, scope: e.target.value })}><option value="">-- Assign to Branch --</option>{properties.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}</select><button onClick={handleSave} className="w-full bg-keenan-gold text-white py-3 rounded-lg font-bold">{editingId ? 'UPDATE ACCOUNT' : 'CREATE ACCOUNT'}</button></div>)}
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
