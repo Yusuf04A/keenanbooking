@@ -4,7 +4,7 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import { api } from '../../lib/api'; // <--- API LARAVEL
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Calendar as CalendarIcon, User, Plus, X, Phone, Mail, MessageSquare, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Loader2, Calendar as CalendarIcon, User, Plus, X, Phone, Mail, MessageSquare, AlertCircle, Globe } from 'lucide-react';
 
 export default function CalendarPage() {
     const navigate = useNavigate();
@@ -17,6 +17,7 @@ export default function CalendarPage() {
     const [availabilityMsg, setAvailabilityMsg] = useState('');
 
     const [rooms, setRooms] = useState<any[]>([]);
+    const [platforms, setPlatforms] = useState<any[]>([]); // <--- STATE BARU UNTUK PLATFORM
 
     // Booking Form State
     const [newBooking, setNewBooking] = useState({
@@ -28,20 +29,21 @@ export default function CalendarPage() {
         check_out_date: '',
         total_price: 0,
         notes: '',
-        booking_source: 'walk_in' // Default Source
+        booking_source: '' // <--- Default kosong, nanti diisi user
     });
 
     const adminScope = localStorage.getItem('keenan_admin_scope') || 'all';
 
     useEffect(() => {
         const init = async () => {
-            await Promise.all([fetchBookingsToEvents(), fetchRooms()]);
+            // Fetch bookings, rooms, DAN platforms secara parallel
+            await Promise.all([fetchBookingsToEvents(), fetchRooms(), fetchPlatforms()]);
             setLoading(false);
         };
         init();
     }, []);
 
-    // LOGIC CEK KETERSEDIAAN (Menggunakan API Laravel)
+    // LOGIC CEK KETERSEDIAAN
     useEffect(() => {
         if (newBooking.room_type_id && newBooking.check_in_date && newBooking.check_out_date) {
             checkAvailability();
@@ -53,17 +55,9 @@ export default function CalendarPage() {
         setAvailabilityMsg('');
 
         try {
-            // Kita belum bikin endpoint khusus check availability, jadi kita fetch booking dan filter di client sementara
-            // Atau kalau mau perfect, nanti tambah endpoint di Laravel. 
-            // Untuk sekarang, kita pakai logika client-side filter dari 'events' yang sudah di-fetch.
-
-            // Logika Tabrakan Tanggal:
-            // (StartA <= EndB) and (EndA >= StartB)
-
             const startDate = new Date(newBooking.check_in_date);
             const endDate = new Date(newBooking.check_out_date);
 
-            // Filter booking yang kamar-nya sama & tanggalnya tabrakan
             const conflict = events.find(event => {
                 if (event.extendedProps.room_id !== newBooking.room_type_id) return false;
                 if (event.extendedProps.status === 'cancelled') return false;
@@ -89,48 +83,64 @@ export default function CalendarPage() {
 
     const fetchRooms = async () => {
         try {
-            // Ambil semua kamar dari Laravel
             const response = await api.get('/admin/rooms');
             let data = response.data;
-
-            // Filter kamar sesuai cabang admin (Scope)
             if (adminScope !== 'all') {
                 data = data.filter((r: any) => r.property?.name === adminScope);
             }
-
             setRooms(data || []);
         } catch (err) {
             console.error("Error fetch rooms:", err);
         }
     };
 
+    // --- FETCH PLATFORMS DARI DATABASE ---
+    const fetchPlatforms = async () => {
+        try {
+            const response = await api.get('/admin/platforms');
+            setPlatforms(response.data || []);
+
+            // Set default booking source ke platform pertama jika ada
+            if (response.data && response.data.length > 0) {
+                setNewBooking(prev => ({ ...prev, booking_source: response.data[0].slug }));
+            } else {
+                setNewBooking(prev => ({ ...prev, booking_source: 'walk_in' }));
+            }
+        } catch (err) {
+            console.error("Error fetch platforms:", err);
+            // Fallback manual jika API error
+            setPlatforms([
+                { id: 1, name: 'Walk-in', slug: 'walk_in' },
+                { id: 2, name: 'Agoda', slug: 'agoda' },
+                { id: 3, name: 'Traveloka', slug: 'traveloka' }
+            ]);
+        }
+    };
+
     const fetchBookingsToEvents = async () => {
         try {
-            // Ambil semua booking dari Laravel
             const response = await api.get('/admin/bookings');
             let data = response.data;
 
-            // Filter booking sesuai cabang admin
             if (adminScope !== 'all') {
                 data = data.filter((b: any) => b.property?.name === adminScope);
             }
 
             const formattedEvents = data.map((booking: any) => {
-                let bgColor = '#C5A059'; // Default: Gold (Paid)
-
+                let bgColor = '#C5A059';
                 switch (booking.status) {
-                    case 'checked_in': bgColor = '#2563EB'; break; // Biru
-                    case 'checked_out': bgColor = '#EF4444'; break; // Merah
-                    case 'cancelled': bgColor = '#94A3B8'; break; // Abu
-                    case 'pending': bgColor = '#F59E0B'; break; // Kuning/Orange
-                    default: bgColor = '#C5A059'; // Paid/Confirmed
+                    case 'checked_in': bgColor = '#2563EB'; break;
+                    case 'checked_out': bgColor = '#EF4444'; break;
+                    case 'cancelled': bgColor = '#94A3B8'; break;
+                    case 'pending': bgColor = '#F59E0B'; break;
+                    default: bgColor = '#C5A059';
                 }
 
                 return {
                     id: booking.id,
                     title: `${booking.customer_name} (${booking.room_type?.name})`,
                     start: booking.check_in_date,
-                    end: booking.check_out_date, // FullCalendar end date is exclusive, but for simplicity we keep it as is
+                    end: booking.check_out_date,
                     backgroundColor: bgColor,
                     borderColor: 'transparent',
                     textColor: '#ffffff',
@@ -138,7 +148,7 @@ export default function CalendarPage() {
                         status: booking.status,
                         guest: booking.customer_name,
                         room: booking.room_type?.name,
-                        room_id: booking.room_type_id // Penting buat cek ketersediaan
+                        room_id: booking.room_type_id
                     }
                 };
             });
@@ -155,7 +165,7 @@ export default function CalendarPage() {
             setNewBooking({
                 ...newBooking,
                 room_type_id: roomId,
-                total_price: selectedRoom.base_price // Set harga dasar
+                total_price: Number(selectedRoom.price_daily || selectedRoom.base_price)
             });
         }
     };
@@ -171,15 +181,7 @@ export default function CalendarPage() {
         if (!selectedRoom) return alert("Pilih tipe kamar!");
 
         try {
-            // --- KIRIM KE LARAVEL ---
-            // Kita pakai endpoint /midtrans/create-transaction (tapi kita sesuaikan di backend agar kalau 'manual', dia langsung paid).
-            // TAPI, lebih bersih kalau kita pakai endpoint AdminController -> storeBooking (belum ada).
-            // JADI, kita pakai endpoint /admin/bookings/manual (Perlu dibuat di backend kalau mau rapi).
-            // ATAU, kita bisa pakai endpoint PUBLIC create-transaction tapi flag manual.
-
-            // SOLUSI CEPAT: Kita pakai endpoint public, lalu Admin langsung update status jadi PAID.
-
-            // 1. Create Booking (Pending)
+            // 1. Create Booking
             const res = await api.post('/midtrans/create-transaction', {
                 property_id: selectedRoom.property_id,
                 room_type_id: newBooking.room_type_id,
@@ -190,35 +192,27 @@ export default function CalendarPage() {
                 check_out_date: newBooking.check_out_date,
                 total_price: newBooking.total_price,
                 customer_notes: newBooking.notes,
-                booking_source: newBooking.booking_source,
-                // Tambahan info source (Backend perlu sesuaikan sedikit kalau mau nyimpen field ini)
-                // Sementara field 'booking_source' mungkin belum ada di controller createTransaction, 
-                // tapi gak bikin error kok.
+                booking_source: newBooking.booking_source, // Kirim source yang dipilih
             });
 
-            const bookingData = res.data.booking; // Dapat ID booking baru
+            const bookingData = res.data.booking;
 
-            // 2. Langsung Update jadi PAID & Set Source
-            // Kita butuh endpoint update status yang lebih powerful buat admin.
-            // Panggil API update status manual yang baru kita buat tadi.
+            // 2. Langsung Update jadi PAID
             await api.put(`/admin/bookings/${bookingData.id}/status`, {
                 status: 'paid'
             });
 
-            // 3. (Opsional) Update Source Booking (Agoda/Traveloka)
-            // Karena endpoint update status cuma ubah status, source mungkin masih default 'Website'.
-            // Kalau mau perfect, backend AdminController butuh fungsi 'updateBooking' lengkap.
-            // Tapi untuk demo, Status 'Paid' sudah cukup membuktikan sistem jalan.
-
             alert("✅ Manual Booking Berhasil Disimpan!");
             setIsModalOpen(false);
+
+            // Reset Form (Default booking source ke item pertama)
             setNewBooking({
                 customer_name: '', customer_email: '', customer_phone: '',
                 room_type_id: '', check_in_date: '', check_out_date: '',
-                total_price: 0, notes: '', booking_source: 'walk_in'
+                total_price: 0, notes: '',
+                booking_source: platforms.length > 0 ? platforms[0].slug : 'walk_in'
             });
 
-            // Refresh Kalender
             fetchBookingsToEvents();
 
         } catch (error: any) {
@@ -272,7 +266,7 @@ export default function CalendarPage() {
                         <div className="bg-keenan-dark p-6 text-white flex justify-between items-center">
                             <div>
                                 <h3 className="text-xl font-serif font-bold tracking-wide">Manual Booking</h3>
-                                <p className="text-xs text-keenan-gold uppercase tracking-[0.2em]">Input Tamu Walk-in / WhatsApp / OTA</p>
+                                <p className="text-xs text-keenan-gold uppercase tracking-[0.2em]">Input Tamu Walk-in / OTA</p>
                             </div>
                             <button onClick={() => setIsModalOpen(false)} className="hover:rotate-90 transition-transform p-2"><X size={24} /></button>
                         </div>
@@ -287,21 +281,29 @@ export default function CalendarPage() {
                             </div>
 
                             <div className="md:col-span-2">
-                                <label className="block text-[10px] font-black text-keenan-gold uppercase tracking-widest mb-2">Sumber Booking (OTA)</label>
+                                <label className="block text-[10px] font-black text-keenan-gold uppercase tracking-widest mb-2 flex items-center gap-2">
+                                    <Globe size={12} /> Sumber Booking (Platform)
+                                </label>
+
+                                {/* DYNAMIC PLATFORM BUTTONS */}
                                 <div className="flex flex-wrap gap-2">
-                                    {['walk_in', 'agoda', 'traveloka', 'tiket.com', 'booking.com', 'airbnb'].map((source) => (
-                                        <button
-                                            key={source}
-                                            type="button"
-                                            onClick={() => setNewBooking({ ...newBooking, booking_source: source })}
-                                            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase border transition-all ${newBooking.booking_source === source
-                                                ? 'bg-keenan-gold text-white border-keenan-gold'
-                                                : 'bg-white text-gray-400 border-gray-200 hover:border-keenan-gold'
-                                                }`}
-                                        >
-                                            {source.replace('_', ' ')}
-                                        </button>
-                                    ))}
+                                    {platforms.length > 0 ? (
+                                        platforms.map((plat) => (
+                                            <button
+                                                key={plat.id}
+                                                type="button"
+                                                onClick={() => setNewBooking({ ...newBooking, booking_source: plat.slug })}
+                                                className={`px-4 py-2 rounded-lg text-xs font-bold uppercase border transition-all ${newBooking.booking_source === plat.slug
+                                                    ? 'bg-keenan-gold text-white border-keenan-gold shadow-md'
+                                                    : 'bg-white text-gray-500 border-gray-200 hover:border-keenan-gold hover:text-keenan-dark'
+                                                    }`}
+                                            >
+                                                {plat.name}
+                                            </button>
+                                        ))
+                                    ) : (
+                                        <p className="text-xs text-gray-400 italic">Belum ada platform. Tambahkan di Dashboard Superadmin.</p>
+                                    )}
                                 </div>
                             </div>
 

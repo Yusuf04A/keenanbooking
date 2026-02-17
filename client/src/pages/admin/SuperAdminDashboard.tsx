@@ -5,7 +5,7 @@ import {
     LayoutDashboard, LogOut, Hotel, BedDouble, Users, BookOpen,
     Plus, Trash2, Edit, X, Loader2, ShieldCheck, UploadCloud,
     TrendingUp, Wallet, UserCheck, Filter, Globe, Calendar,
-    CheckCircle, Mail, Phone, MapPin, Printer, CreditCard
+    CheckCircle, Mail, Phone, MapPin, Printer, CreditCard, Layers
 } from 'lucide-react';
 
 // --- 1. CHART GARIS (REVENUE) ---
@@ -79,7 +79,7 @@ const SimpleBarChart = ({ data, labels }: { data: number[], labels: string[] }) 
 
 export default function SuperAdminDashboard() {
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState<'overview' | 'bookings' | 'properties' | 'rooms' | 'staff'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'bookings' | 'properties' | 'rooms' | 'staff' | 'platforms'>('overview');
 
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
@@ -89,6 +89,7 @@ export default function SuperAdminDashboard() {
     const [properties, setProperties] = useState<any[]>([]);
     const [rooms, setRooms] = useState<any[]>([]);
     const [admins, setAdmins] = useState<any[]>([]);
+    const [platforms, setPlatforms] = useState<any[]>([]); // <--- NEW STATE FOR PLATFORMS
 
     const [selectedPropertyFilter, setSelectedPropertyFilter] = useState('all');
     const [analytics, setAnalytics] = useState({
@@ -101,7 +102,7 @@ export default function SuperAdminDashboard() {
 
     // Form States
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [modalType, setModalType] = useState<'property' | 'room' | 'staff' | 'booking_detail' | ''>('');
+    const [modalType, setModalType] = useState<'property' | 'room' | 'staff' | 'booking_detail' | 'platform' | ''>('');
     const [editingId, setEditingId] = useState<string | null>(null);
     const [formData, setFormData] = useState<any>({});
 
@@ -131,17 +132,19 @@ export default function SuperAdminDashboard() {
         setLoading(true);
         try {
             // Panggil API Laravel secara parallel
-            const [propsRes, roomsRes, staffRes, bookingsRes] = await Promise.all([
+            const [propsRes, roomsRes, staffRes, bookingsRes, platformsRes] = await Promise.all([
                 api.get('/properties'),         // Ambil Property
                 api.get('/admin/rooms'),        // Ambil Semua Kamar
                 api.get('/admin/staff'),        // Ambil Staff
-                api.get('/admin/bookings')      // Ambil Booking
+                api.get('/admin/bookings'),     // Ambil Booking
+                api.get('/admin/platforms')     // Ambil Platforms (NEW)
             ]);
 
             setProperties(propsRes.data || []);
             setRooms(roomsRes.data || []);
             setAdmins(staffRes.data || []);
             setRawBookings(bookingsRes.data || []);
+            setPlatforms(platformsRes.data || []); // Set Data Platforms
 
         } catch (error: any) {
             console.error("Fetch Error:", error);
@@ -203,45 +206,50 @@ export default function SuperAdminDashboard() {
     const handleSave = async () => {
         setUploading(true);
         try {
-            // Catatan: Image Upload diganti Text Input URL dulu biar simpel & cepat
-            // Kalau mau upload file beneran, backend harus setup 'php artisan storage:link'
-
+            // PROPERTY
             if (modalType === 'property') {
                 const payload = {
                     name: formData.name,
                     address: formData.address,
                     description: formData.description,
-                    image_url: formData.image_url || 'https://images.unsplash.com/photo-1566073771259-6a8506099945' // Default Image
+                    image_url: formData.image_url || 'https://images.unsplash.com/photo-1566073771259-6a8506099945'
                 };
-
                 if (editingId) await api.put(`/admin/properties/${editingId}`, payload);
                 else await api.post('/admin/properties', payload);
             }
 
+            // ROOM
             if (modalType === 'room') {
                 const payload = {
                     property_id: formData.property_id,
                     name: formData.name,
-                    base_price: formData.base_price,
+                    price_daily: formData.price_daily,     // <--- Update Field Baru
+                    price_weekly: formData.price_weekly,   // <--- Update Field Baru
+                    price_monthly: formData.price_monthly, // <--- Update Field Baru
                     capacity: formData.capacity,
                     total_stock: formData.total_stock,
                     image_url: formData.image_url || 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304',
                     facilities: selectedFacilities
                 };
-
                 if (editingId) await api.put(`/admin/rooms/${editingId}`, payload);
                 else await api.post('/admin/rooms', payload);
             }
 
+            // STAFF
             if (modalType === 'staff') {
                 const payload = { ...formData };
                 if (editingId) await api.put(`/admin/staff/${editingId}`, payload);
                 else await api.post('/admin/staff', payload);
             }
 
+            // PLATFORM (NEW)
+            if (modalType === 'platform') {
+                await api.post('/admin/platforms', { name: formData.name });
+            }
+
             alert("Data Berhasil Disimpan!");
             closeModal();
-            fetchAllData(); // Refresh data biar tabel update
+            fetchAllData();
         } catch (error: any) {
             console.error(error);
             alert("Gagal menyimpan: " + (error.response?.data?.message || error.message));
@@ -250,12 +258,13 @@ export default function SuperAdminDashboard() {
         }
     };
 
-    const handleDelete = async (type: 'property' | 'room' | 'staff', id: string) => {
+    const handleDelete = async (type: 'property' | 'room' | 'staff' | 'platform', id: string) => {
         if (!confirm("Are you sure you want to delete this data?")) return;
         try {
             if (type === 'property') await api.delete(`/admin/properties/${id}`);
             if (type === 'room') await api.delete(`/admin/rooms/${id}`);
             if (type === 'staff') await api.delete(`/admin/staff/${id}`);
+            if (type === 'platform') await api.delete(`/admin/platforms/${id}`);
             fetchAllData();
         } catch (error) {
             alert("Gagal menghapus data.");
@@ -265,7 +274,6 @@ export default function SuperAdminDashboard() {
     const openModal = (type: any, data: any = null) => {
         setModalType(type); setEditingId(data?.id);
         setFormData(data || {});
-        // Laravel kirim fasilitas sbg array JSON, jadi aman langsung dipakai
         setSelectedFacilities(data?.facilities || []);
         setIsModalOpen(true);
     }
@@ -278,8 +286,8 @@ export default function SuperAdminDashboard() {
 
     const handleLogout = async () => {
         try {
-            await api.post('/logout'); // Invalidate token di backend
-        } catch (e) { } // Abaikan error logout
+            await api.post('/logout');
+        } catch (e) { }
         localStorage.clear();
         navigate('/admin/login');
     };
@@ -300,6 +308,8 @@ export default function SuperAdminDashboard() {
                     <button onClick={() => setActiveTab('properties')} className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${activeTab === 'properties' ? 'bg-white/10 text-white font-bold' : 'text-gray-400 hover:bg-white/5'}`}><Hotel size={18} /> Properties</button>
                     <button onClick={() => setActiveTab('rooms')} className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${activeTab === 'rooms' ? 'bg-white/10 text-white font-bold' : 'text-gray-400 hover:bg-white/5'}`}><BedDouble size={18} /> Rooms</button>
                     <button onClick={() => setActiveTab('staff')} className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${activeTab === 'staff' ? 'bg-white/10 text-white font-bold' : 'text-gray-400 hover:bg-white/5'}`}><Users size={18} /> Staff</button>
+                    {/* NEW MENU: PLATFORMS */}
+                    <button onClick={() => setActiveTab('platforms')} className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${activeTab === 'platforms' ? 'bg-white/10 text-white font-bold' : 'text-gray-400 hover:bg-white/5'}`}><Layers size={18} /> Platforms</button>
                 </nav>
                 <button onClick={handleLogout} className="absolute bottom-8 left-6 right-6 flex items-center justify-center gap-2 p-3 rounded-lg border border-red-900/50 text-red-400 hover:bg-red-900/20"><LogOut size={18} /> Logout</button>
             </div>
@@ -337,21 +347,6 @@ export default function SuperAdminDashboard() {
                                 {analytics.channelStats.data.length > 0 ? (<SimpleBarChart data={analytics.channelStats.data} labels={analytics.channelStats.labels} />) : (<div className="flex-1 flex flex-col items-center justify-center text-gray-300"><Globe size={48} className="mb-2 opacity-20" /><p className="text-sm italic">No channel data available</p></div>)}
                             </div>
                         </div>
-
-                        {selectedPropertyFilter === 'all' && (
-                            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                                <div className="p-8 border-b border-gray-100"><h3 className="font-bold text-lg text-keenan-dark">🏆 Top Performing Properties</h3></div>
-                                <table className="w-full text-left text-sm">
-                                    <thead className="bg-gray-50 text-gray-400 uppercase text-[10px] font-bold"><tr><th className="p-6">Rank</th><th className="p-6">Property Name</th><th className="p-6 text-right">Total Revenue</th></tr></thead>
-                                    <tbody className="divide-y divide-gray-50">
-                                        {analytics.topProperties.map(([name, revenue], index) => (
-                                            <tr key={name} className="hover:bg-gray-50"><td className="p-6 font-bold text-keenan-gold">#{index + 1}</td><td className="p-6 font-bold text-keenan-dark">{name}</td><td className="p-6 text-right font-mono font-bold text-green-600">{formatRupiah(revenue)}</td></tr>
-                                        ))}
-                                        {analytics.topProperties.length === 0 && (<tr><td colSpan={3} className="p-8 text-center text-gray-400 italic">No revenue data available.</td></tr>)}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
                     </div>
                 )}
 
@@ -424,10 +419,10 @@ export default function SuperAdminDashboard() {
                                     <h3 className="text-lg font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Hotel size={18} /> {prop.name}</h3>
                                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                                         <table className="w-full text-left text-sm">
-                                            <thead className="bg-gray-50 text-gray-400 uppercase text-[10px] font-bold"><tr><th className="p-4 pl-6">Room Name</th><th className="p-4">Capacity</th><th className="p-4">Stock</th><th className="p-4">Base Price</th><th className="p-4 text-right pr-6">Actions</th></tr></thead>
+                                            <thead className="bg-gray-50 text-gray-400 uppercase text-[10px] font-bold"><tr><th className="p-4 pl-6">Room Name</th><th className="p-4">Capacity</th><th className="p-4">Stock</th><th className="p-4">Price (Daily)</th><th className="p-4 text-right pr-6">Actions</th></tr></thead>
                                             <tbody className="divide-y divide-gray-50">
                                                 {hotelRooms.map(room => (
-                                                    <tr key={room.id} className="hover:bg-gray-50"><td className="p-4 pl-6 font-bold text-keenan-dark">{room.name}</td><td className="p-4 text-gray-500">{room.capacity} Person</td><td className="p-4 text-blue-600 font-bold">{room.total_stock} Unit</td><td className="p-4 font-bold text-keenan-dark">{formatRupiah(room.base_price)}</td><td className="p-4 pr-6 text-right"><div className="flex justify-end gap-2"><button onClick={() => openModal('room', room)} className="text-blue-400 hover:text-blue-600 p-2"><Edit size={18} /></button><button onClick={() => handleDelete('room', room.id)} className="text-red-400 hover:text-red-600 p-2"><Trash2 size={18} /></button></div></td></tr>
+                                                    <tr key={room.id} className="hover:bg-gray-50"><td className="p-4 pl-6 font-bold text-keenan-dark">{room.name}</td><td className="p-4 text-gray-500">{room.capacity} Person</td><td className="p-4 text-blue-600 font-bold">{room.total_stock} Unit</td><td className="p-4 font-bold text-keenan-dark">{formatRupiah(room.price_daily || room.base_price)}</td><td className="p-4 pr-6 text-right"><div className="flex justify-end gap-2"><button onClick={() => openModal('room', room)} className="text-blue-400 hover:text-blue-600 p-2"><Edit size={18} /></button><button onClick={() => handleDelete('room', room.id)} className="text-red-400 hover:text-red-600 p-2"><Trash2 size={18} /></button></div></td></tr>
                                                 ))}
                                             </tbody>
                                         </table>
@@ -457,6 +452,27 @@ export default function SuperAdminDashboard() {
                                     </div>
                                     <div><h3 className="font-bold text-lg text-keenan-dark">{admin.full_name}</h3><p className="text-sm text-gray-400">{admin.email}</p></div>
                                     <div className="mt-4 pt-4 border-t border-gray-50 flex justify-between items-center"><span className="text-[10px] font-bold text-gray-400 uppercase">Assigned To</span><span className="text-xs font-bold text-keenan-gold bg-keenan-gold/10 px-2 py-1 rounded">{admin.scope === 'all' ? 'All Branches' : admin.scope}</span></div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* --- TAB 6: MANAGE PLATFORMS (NEW) --- */}
+                {activeTab === 'platforms' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4">
+                        <div className="flex justify-between items-center mb-8">
+                            <h2 className="text-2xl font-serif font-bold text-keenan-dark">Booking Platforms</h2>
+                            <button onClick={() => openModal('platform')} className="bg-keenan-dark text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-black"><Plus size={18} /> Add Platform</button>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {platforms.map(plat => (
+                                <div key={plat.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center hover:shadow-md transition-shadow">
+                                    <div className="flex items-center gap-3">
+                                        <Globe size={18} className="text-gray-400" />
+                                        <span className="font-bold text-gray-700">{plat.name}</span>
+                                    </div>
+                                    <button onClick={() => handleDelete('platform', plat.id)} className="text-red-400 hover:text-red-600 p-2"><Trash2 size={16} /></button>
                                 </div>
                             ))}
                         </div>
@@ -558,7 +574,7 @@ export default function SuperAdminDashboard() {
                             </div>
                         )}
 
-                        {/* --- CASE 2: EDIT FORM (PROPERTY/ROOM/STAFF) --- */}
+                        {/* --- CASE 2: EDIT FORM (PROPERTY/ROOM/STAFF/PLATFORM) --- */}
                         {modalType !== 'booking_detail' && (
                             <div className="p-8">
                                 <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-xl font-serif capitalize">{editingId ? 'Edit' : 'Add New'} {modalType}</h3></div>
@@ -568,7 +584,7 @@ export default function SuperAdminDashboard() {
                                         <input placeholder="Hotel Name" value={formData.name || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, name: e.target.value })} />
                                         <input placeholder="Address" value={formData.address || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, address: e.target.value })} />
 
-                                        {/* IMAGE URL INPUT (PENGGANTI UPLOAD FILE SEMENTARA) */}
+                                        {/* IMAGE URL INPUT */}
                                         <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
                                             <label className="text-xs font-bold text-gray-400 uppercase">Image URL (Link Gambar)</label>
                                             <input placeholder="https://..." value={formData.image_url || ''} className="w-full p-2 mt-1 bg-white border rounded outline-none" onChange={e => setFormData({ ...formData, image_url: e.target.value })} />
@@ -588,12 +604,18 @@ export default function SuperAdminDashboard() {
                                         </select>
                                         <input placeholder="Room Name" value={formData.name || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, name: e.target.value })} />
 
+                                        {/* 3 OPSI HARGA */}
                                         <div className="grid grid-cols-3 gap-4">
-                                            <div className="col-span-2"><input type="number" placeholder="Price (Rp)" value={formData.base_price || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, base_price: e.target.value })} /></div>
-                                            <div><input type="number" placeholder="Cap" value={formData.capacity || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, capacity: e.target.value })} /></div>
+                                            <div className="col-span-3"><label className="text-xs font-bold text-gray-400 uppercase">Pricing Options</label></div>
+                                            <div><input type="number" placeholder="Daily Price" value={formData.price_daily || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, price_daily: e.target.value })} /></div>
+                                            <div><input type="number" placeholder="Weekly Price" value={formData.price_weekly || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, price_weekly: e.target.value })} /></div>
+                                            <div><input type="number" placeholder="Monthly Price" value={formData.price_monthly || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, price_monthly: e.target.value })} /></div>
                                         </div>
 
-                                        <div><input type="number" placeholder="Total Room Stock" value={formData.total_stock || ''} className="w-full p-3 border rounded-lg font-bold" onChange={e => setFormData({ ...formData, total_stock: e.target.value })} /></div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div><input type="number" placeholder="Capacity" value={formData.capacity || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, capacity: e.target.value })} /></div>
+                                            <div><input type="number" placeholder="Total Stock" value={formData.total_stock || ''} className="w-full p-3 border rounded-lg font-bold" onChange={e => setFormData({ ...formData, total_stock: e.target.value })} /></div>
+                                        </div>
 
                                         {/* IMAGE URL INPUT */}
                                         <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
@@ -620,6 +642,14 @@ export default function SuperAdminDashboard() {
                                             {properties.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                                         </select>
                                         <button onClick={handleSave} className="w-full bg-keenan-gold text-white py-3 rounded-lg font-bold">{editingId ? 'UPDATE ACCOUNT' : 'CREATE ACCOUNT'}</button>
+                                    </div>
+                                )}
+
+                                {modalType === 'platform' && (
+                                    <div className="space-y-4">
+                                        <label className="text-sm font-bold text-gray-500">Platform Name</label>
+                                        <input placeholder="Ex: Traveloka, Agoda, Tiket.com" value={formData.name || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                                        <button onClick={handleSave} className="w-full bg-keenan-gold text-white py-3 rounded-lg font-bold">ADD PLATFORM</button>
                                     </div>
                                 )}
                             </div>

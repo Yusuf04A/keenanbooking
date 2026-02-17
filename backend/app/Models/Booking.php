@@ -4,13 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Concerns\HasUuids; // <--- WAJIB IMPORT INI
 
 class Booking extends Model
 {
-    use HasFactory, HasUuids;
+    use HasFactory, HasUuids; // <--- WAJIB PASANG INI
 
-    protected $guarded = ['id']; // Semua boleh diisi kecuali ID
+    // Kita pakai guarded agar aman dan fleksibel (seperti diskusi sebelumnya)
+    protected $guarded = ['id']; 
 
     public function property()
     {

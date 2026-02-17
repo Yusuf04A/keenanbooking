@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../../lib/api'; // <--- GANTI: PAKE API LARAVEL
+import { api } from '../../lib/api';
 import { useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, LogOut as LogOutIcon, Calendar, Search,
@@ -25,12 +25,10 @@ export default function AdminDashboard() {
     const [isUpdating, setIsUpdating] = useState(false);
 
     useEffect(() => {
-        // 1. Cek LocalStorage
         const role = localStorage.getItem('keenan_admin_role');
         const name = localStorage.getItem('keenan_admin_name') || 'Staff';
         const adminScope = localStorage.getItem('keenan_admin_scope') || 'all';
 
-        // Redirect jika Superadmin nyasar kesini
         if (role === 'superadmin') {
             navigate('/superadmin/dashboard');
             return;
@@ -39,19 +37,15 @@ export default function AdminDashboard() {
         setAdminName(name);
         setScope(adminScope);
 
-        // 2. Fetch Data
         fetchBookings(adminScope);
     }, [navigate]);
 
     const fetchBookings = async (adminScope: string) => {
         setLoading(true);
         try {
-            // Panggil API Laravel
             const response = await api.get('/admin/bookings');
             let data = response.data;
 
-            // FILTER DATA CLIENT-SIDE SESUAI SCOPE STAFF
-            // Jika scope bukan 'all', hanya tampilkan booking milik cabang hotel tersebut
             if (adminScope && adminScope !== 'all') {
                 data = data.filter((b: any) => b.property?.name === adminScope);
             }
@@ -64,20 +58,37 @@ export default function AdminDashboard() {
         }
     };
 
-    const getSourceCount = (sourceName: string) => {
-        return bookings.filter(b => (b.booking_source || 'website').toLowerCase() === sourceName.toLowerCase()).length;
+    // --- LOGIC BARU: HITUNG SUMBER SECARA DINAMIS ---
+    const getSourceStats = () => {
+        const stats: Record<string, number> = {};
+
+        // 1. Inisialisasi default agar tetap muncul walau 0
+        const defaults = ['website', 'agoda', 'traveloka', 'tiket', 'walk_in'];
+        defaults.forEach(d => stats[d] = 0);
+
+        // 2. Hitung dari data booking yang ada
+        bookings.forEach(b => {
+            // Normalisasi nama (trip.com -> trip_com -> trip com)
+            let source = (b.booking_source || 'website').toLowerCase().replace(/[-.]/g, '_');
+
+            // Handle variasi penulisan manual
+            if (source === 'walk in') source = 'walk_in';
+            if (source === 'tiket.com') source = 'tiket';
+
+            stats[source] = (stats[source] || 0) + 1;
+        });
+
+        return Object.entries(stats);
     };
 
-    // UPDATE STATUS PAKE API LARAVEL
+    // UPDATE STATUS
     const handleStatusUpdate = async (newStatus: string) => {
         if (!selectedBooking) return;
         setIsUpdating(true);
 
         try {
-            // Request ke Laravel
             await api.put(`/admin/bookings/${selectedBooking.id}/status`, { status: newStatus });
 
-            // Update State Lokal (Biar gak perlu refresh/fetch ulang)
             const updatedBookings = bookings.map(b =>
                 b.id === selectedBooking.id ? { ...b, status: newStatus } : b
             );
@@ -87,7 +98,6 @@ export default function AdminDashboard() {
 
             alert(`Berhasil ubah status menjadi: ${newStatus.toUpperCase().replace('_', ' ')}`);
 
-            // Kalau Check-Out, tutup modal
             if (newStatus === 'checked_out') setSelectedBooking(null);
 
         } catch (err: any) {
@@ -122,14 +132,22 @@ export default function AdminDashboard() {
 
     const getSourceBadge = (source: string = 'website') => {
         const s = source?.toLowerCase() || 'website';
-        if (s.includes('agoda')) return <span className="text-[10px] font-bold px-2 py-1 bg-purple-100 text-purple-700 rounded border border-purple-200 flex items-center gap-1"><Smartphone size={10} /> AGODA</span>;
-        if (s.includes('traveloka')) return <span className="text-[10px] font-bold px-2 py-1 bg-blue-100 text-blue-700 rounded border border-blue-200 flex items-center gap-1"><Smartphone size={10} /> TRAVELOKA</span>;
-        if (s.includes('tiket')) return <span className="text-[10px] font-bold px-2 py-1 bg-yellow-100 text-yellow-700 rounded border border-yellow-200 flex items-center gap-1"><Smartphone size={10} /> TIKET.COM</span>;
-        if (s === 'walk_in') return <span className="text-[10px] font-bold px-2 py-1 bg-gray-100 text-gray-700 rounded border border-gray-200 flex items-center gap-1"><User size={10} /> WALK-IN</span>;
-        return <span className="text-[10px] font-bold px-2 py-1 bg-keenan-gold/10 text-keenan-gold rounded border border-keenan-gold/20 flex items-center gap-1"><Globe size={10} /> WEBSITE</span>;
+
+        if (s.includes('agoda')) return <span className="text-[10px] font-bold px-2 py-1 bg-purple-100 text-purple-700 rounded border border-purple-200 flex items-center gap-1 w-fit"><Smartphone size={10} /> AGODA</span>;
+        if (s.includes('traveloka')) return <span className="text-[10px] font-bold px-2 py-1 bg-blue-100 text-blue-700 rounded border border-blue-200 flex items-center gap-1 w-fit"><Smartphone size={10} /> TRAVELOKA</span>;
+        if (s.includes('tiket')) return <span className="text-[10px] font-bold px-2 py-1 bg-yellow-100 text-yellow-700 rounded border border-yellow-200 flex items-center gap-1 w-fit"><Smartphone size={10} /> TIKET.COM</span>;
+        if (s.includes('booking')) return <span className="text-[10px] font-bold px-2 py-1 bg-blue-900 text-white rounded border border-blue-800 flex items-center gap-1 w-fit"><Smartphone size={10} /> BOOKING.COM</span>;
+        if (s === 'walk_in' || s === 'walk-in' || s.includes('walk')) return <span className="text-[10px] font-bold px-2 py-1 bg-gray-100 text-gray-700 rounded border border-gray-200 flex items-center gap-1 w-fit"><User size={10} /> WALK-IN</span>;
+        if (s === 'website') return <span className="text-[10px] font-bold px-2 py-1 bg-keenan-gold/10 text-keenan-gold rounded border border-keenan-gold/20 flex items-center gap-1 w-fit"><Globe size={10} /> WEBSITE</span>;
+
+        // FALLBACK DINAMIS (Untuk Trip.com dll)
+        return (
+            <span className="text-[10px] font-bold px-2 py-1 bg-teal-50 text-teal-700 rounded border border-teal-200 flex items-center gap-1 w-fit uppercase">
+                <Globe size={10} /> {s.replace(/[-_]/g, ' ')}
+            </span>
+        );
     };
 
-    // Filter Logic untuk Tampilan Tabel
     const displayBookings = bookings.filter(b => {
         const matchesStatus = filter === 'all' || b.status === filter;
         const searchLower = searchTerm.toLowerCase();
@@ -157,7 +175,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* MAIN CONTENT */}
-            <div className="flex-1 md:ml-64 p-8">
+            <div className="flex-1 md:ml-64 p-8 overflow-hidden"> {/* overflow-hidden biar ga scroll body */}
                 {/* Header */}
                 <div className="flex justify-between items-end mb-8">
                     <div>
@@ -173,22 +191,23 @@ export default function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* --- STATISTIK SUMBER BOOKING (OTA) --- */}
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-                    {['website', 'agoda', 'traveloka', 'tiket.com', 'walk_in'].map((src) => (
-                        <div key={src} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:-translate-y-1 transition-transform cursor-default">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase mb-1">{src.replace('_', ' ')}</span>
-                            <span className="text-2xl font-bold text-keenan-dark">{getSourceCount(src)}</span>
+                {/* --- STATISTIK SUMBER BOOKING (SCROLLABLE & DINAMIS) --- */}
+                {/* KITA GUNAKAN FLEX DENGAN OVERFLOW-X-AUTO AGAR BISA DIGESER */}
+                <div className="flex gap-4 mb-8 overflow-x-auto pb-4 scrollbar-hide snap-x">
+                    {getSourceStats().map(([source, count]) => (
+                        <div key={source} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center justify-center hover:-translate-y-1 transition-transform cursor-default min-w-[140px] flex-shrink-0 snap-center">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase mb-1">{source.replace(/_/g, ' ')}</span>
+                            <span className="text-3xl font-bold text-keenan-dark">{count}</span>
                         </div>
                     ))}
                 </div>
 
                 {/* Filter & Search */}
                 <div className="bg-white p-4 rounded-xl shadow-sm mb-6 flex flex-wrap gap-4 justify-between items-center border border-gray-100">
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 overflow-x-auto pb-1">
                         {['all', 'paid', 'checked_in', 'checked_out', 'pending'].map((stat) => (
                             <button key={stat} onClick={() => setFilter(stat)}
-                                className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${filter === stat ? 'bg-keenan-dark text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                                className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${filter === stat ? 'bg-keenan-dark text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
                                 {stat.replace('_', ' ')}
                             </button>
                         ))}
@@ -228,7 +247,6 @@ export default function AdminDashboard() {
                                             <p className="text-[10px] text-gray-400 font-normal">{booking.customer_phone}</p>
                                         </td>
                                         <td className="p-6">
-                                            {/* PERBAIKAN: Gunakan optional chaining untuk Laravel relation (singular/camelCase) */}
                                             <p className="font-bold text-xs">{booking.room_type?.name}</p>
                                             <p className="text-[10px] text-gray-400 uppercase">{booking.property?.name}</p>
                                         </td>

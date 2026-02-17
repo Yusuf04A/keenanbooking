@@ -6,6 +6,7 @@ use Illuminate\Database\Seeder;
 use App\Models\Property;
 use App\Models\RoomType;
 use App\Models\Admin;
+use App\Models\BookingPlatform;
 
 class DatabaseSeeder extends Seeder
 {
@@ -24,7 +25,9 @@ class DatabaseSeeder extends Seeder
             'property_id' => $p1->id,
             'name' => 'Standard Twin',
             'description' => 'Kamar nyaman dengan 2 kasur single.',
-            'base_price' => 250000,
+            'price_daily' => 250000,   // <--- GANTI 'base_price' JADI INI
+            'price_weekly' => 1500000, // Tambahan
+            'price_monthly' => 5000000,
             'capacity' => 2,
             'total_stock' => 5,
             'image_url' => 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?q=80&w=1000',
@@ -44,7 +47,9 @@ class DatabaseSeeder extends Seeder
             'property_id' => $p2->id,
             'name' => 'Deluxe Room',
             'description' => 'Kamar luas dengan fasilitas lengkap.',
-            'base_price' => 350000,
+            'price_daily' => 350000,   // <--- GANTI INI
+            'price_weekly' => 2100000,
+            'price_monthly' => 7500000,
             'capacity' => 2,
             'total_stock' => 3,
             'image_url' => 'https://images.unsplash.com/photo-1611892440504-42a792e24d32?q=80&w=2070',
@@ -64,7 +69,9 @@ class DatabaseSeeder extends Seeder
             'property_id' => $p3->id,
             'name' => 'Superior Room',
             'description' => 'Pilihan tepat untuk mahasiswa dan traveler.',
-            'base_price' => 200000,
+            'price_daily' => 200000,   // <--- GANTI INI
+            'price_weekly' => 1200000,
+            'price_monthly' => 4000000,
             'capacity' => 2,
             'total_stock' => 8,
             'image_url' => 'https://images.unsplash.com/photo-1590490360182-c33d57733427?q=80&w=2070',
@@ -79,5 +86,10 @@ class DatabaseSeeder extends Seeder
             'role' => 'superadmin',
             'scope' => 'all'
         ]);
+
+        BookingPlatform::create(['name' => 'Walk-in', 'slug' => 'walk_in']);
+        BookingPlatform::create(['name' => 'Traveloka', 'slug' => 'traveloka']);
+        BookingPlatform::create(['name' => 'Agoda', 'slug' => 'agoda']);
+        BookingPlatform::create(['name' => 'Tiket.com', 'slug' => 'tiket_com']);
     }
 }

@@ -14,7 +14,9 @@ class RoomType extends Model
         'property_id',
         'name',
         'description',
-        'base_price',
+        'price_daily',
+        'price_weekly',
+        'price_monthly', // <--- Update ini
         'capacity',
         'total_stock',
         'image_url',

@@ -8,6 +8,7 @@ use App\Models\Property;
 use App\Models\RoomType;
 use App\Models\Admin;
 use Illuminate\Support\Str;
+use App\Models\BookingPlatform;
 
 class AdminController extends Controller
 {
@@ -45,7 +46,9 @@ class AdminController extends Controller
         $data = $request->validate([
             'property_id' => 'required',
             'name' => 'required',
-            'base_price' => 'required|numeric',
+            'price_daily' => 'required|numeric',   // Ganti base_price
+            'price_weekly' => 'nullable|numeric',  // Baru
+            'price_monthly' => 'nullable|numeric', // Baru
             'capacity' => 'required|numeric',
             'total_stock' => 'required|numeric',
             'image_url' => 'nullable',
@@ -121,5 +124,23 @@ class AdminController extends Controller
             'totalRevenue' => $totalRevenue,
             'totalBookings' => $totalBookings
         ]);
+    }
+
+    public function indexPlatforms()
+    {
+        return response()->json(BookingPlatform::all());
+    }
+
+    public function storePlatform(Request $request)
+    {
+        $data = $request->validate(['name' => 'required']);
+        $data['slug'] = \Illuminate\Support\Str::slug($data['name']);
+        return response()->json(BookingPlatform::create($data));
+    }
+
+    public function destroyPlatform($id)
+    {
+        BookingPlatform::destroy($id);
+        return response()->json(['message' => 'Deleted']);
     }
 }
