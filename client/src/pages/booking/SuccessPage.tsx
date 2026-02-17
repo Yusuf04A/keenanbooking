@@ -8,7 +8,7 @@ export default function SuccessPage() {
     const location = useLocation();
     const navigate = useNavigate();
 
-    // Ambil data dari state
+    // Ambil data dari state navigasi
     const { booking } = location.state || {};
 
     // --- Helper Formatter ---
@@ -34,6 +34,13 @@ export default function SuccessPage() {
         const end = new Date(booking.check_out_date);
         return Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24));
     };
+
+    // --- DATA DINAMIS (PENTING: Ambil dari relasi data) ---
+    // Pastikan fallback image ada jika data gambar kosong
+    const roomImage = booking?.room_types?.image_url || 'https://images.unsplash.com/photo-1566073771259-6a8506099945';
+    // Handle nama properti dari berbagai kemungkinan struktur data (property / properties)
+    const propertyName = booking?.property?.name || booking?.properties?.name || "Keenan Living Hotel";
+    const roomName = booking?.room_types?.name || "Kamar Hotel";
 
     // --- TAMPILAN ERROR (Jika Data Kosong) ---
     if (!booking) {
@@ -61,41 +68,51 @@ export default function SuccessPage() {
     }
 
     return (
-        <div className="min-h-screen bg-[#F5F6FA] font-sans">
+        <div className="min-h-screen bg-[#F5F6FA] font-sans print:bg-white">
+            
+            {/* CSS KHUSUS PRINT: Sembunyikan elemen yang tidak perlu */}
+            <style>{`
+                @media print {
+                    .no-print { display: none !important; }
+                    .print-area { box-shadow: none !important; border: 1px solid #ddd !important; }
+                    body { background-color: white !important; -webkit-print-color-adjust: exact; }
+                }
+            `}</style>
+
             {/* TOP BAR */}
-            <div className="bg-keenan-dark text-white border-b border-white/10">
+            <div className="bg-keenan-dark text-white border-b border-white/10 print:bg-white print:text-black print:border-b-2 print:border-black">
                 <div className="max-w-7xl mx-auto px-6 md:px-10 py-8">
                     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
                         <div className="flex items-start gap-4">
-                            <div className="w-14 h-14 bg-white/10 rounded-xl flex items-center justify-center border border-white/20">
-                                <CheckCircle size={30} className="text-keenan-gold" />
+                            <div className="w-14 h-14 bg-white/10 rounded-xl flex items-center justify-center border border-white/20 print:border-black print:text-black">
+                                <CheckCircle size={30} className="text-keenan-gold print:text-black" />
                             </div>
                             <div>
                                 <h1 className="text-2xl md:text-3xl font-serif font-bold tracking-wide">
                                     Pembayaran Berhasil!
                                 </h1>
-                                <p className="text-white/70 text-sm mt-1">
+                                <p className="text-white/70 text-sm mt-1 print:text-gray-600">
                                     Pesanan Anda telah terkonfirmasi. Simpan bukti booking ini.
                                 </p>
-                                <div className="mt-3 flex items-center gap-2 text-xs text-white/60">
-                                    <MapPin size={14} className="text-keenan-gold" />
-                                    <span>Keenan Living Hotel • Yogyakarta, Indonesia</span>
+                                <div className="mt-3 flex items-center gap-2 text-xs text-white/60 print:text-gray-600">
+                                    <MapPin size={14} className="text-keenan-gold print:text-black" />
+                                    <span>{propertyName} • Yogyakarta, Indonesia</span>
                                 </div>
                             </div>
                         </div>
 
                         <div className="flex flex-col items-start lg:items-end">
-                            <p className="text-xs font-bold uppercase tracking-widest text-white/50">
+                            <p className="text-xs font-bold uppercase tracking-widest text-white/50 print:text-gray-500">
                                 Booking Code
                             </p>
-                            <p className="text-3xl md:text-4xl font-mono font-bold text-keenan-gold tracking-wider">
+                            <p className="text-3xl md:text-4xl font-mono font-bold text-keenan-gold tracking-wider print:text-black">
                                 {booking.booking_code}
                             </p>
                         </div>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="mt-8 flex flex-col sm:flex-row gap-3">
+                    {/* Action Buttons (Disembunyikan saat Print) */}
+                    <div className="mt-8 flex flex-col sm:flex-row gap-3 no-print">
                         <button
                             onClick={() => window.print()}
                             className="bg-keenan-gold text-keenan-dark font-bold px-6 py-3 rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-2 shadow-md"
@@ -123,13 +140,13 @@ export default function SuccessPage() {
                     <div className="lg:col-span-8 space-y-8">
 
                         {/* SECTION: INFORMASI TAMU */}
-                        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+                        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden print-area">
                             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                                 <h2 className="text-sm font-bold uppercase tracking-widest text-gray-500 flex items-center gap-2">
                                     <User size={16} />
                                     Informasi Pemesan
                                 </h2>
-                                <span className="text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 uppercase tracking-wide">
+                                <span className="text-xs font-bold px-3 py-1 rounded-full bg-green-100 text-green-700 uppercase tracking-wide print:border print:border-green-600">
                                     Paid
                                 </span>
                             </div>
@@ -161,7 +178,7 @@ export default function SuccessPage() {
                         </div>
 
                         {/* SECTION: CHECK IN OUT */}
-                        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+                        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden print-area">
                             <div className="px-6 py-4 border-b border-gray-100">
                                 <h2 className="text-sm font-bold uppercase tracking-widest text-gray-500 flex items-center gap-2">
                                     <Clock size={16} />
@@ -198,7 +215,7 @@ export default function SuccessPage() {
                             </div>
 
                             <div className="px-6 pb-6">
-                                <div className="flex items-center gap-3 bg-blue-50 text-blue-700 px-4 py-3 rounded-xl text-sm font-medium border border-blue-100">
+                                <div className="flex items-center gap-3 bg-blue-50 text-blue-700 px-4 py-3 rounded-xl text-sm font-medium border border-blue-100 print:bg-white print:border-gray-300 print:text-black">
                                     <ShieldCheck size={18} />
                                     <span>Booking Anda dijamin aman dan telah tercatat di sistem.</span>
                                 </div>
@@ -206,7 +223,7 @@ export default function SuccessPage() {
                         </div>
 
                         {/* SECTION: ROOM INFO */}
-                        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+                        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden print-area">
                             <div className="px-6 py-4 border-b border-gray-100">
                                 <h2 className="text-sm font-bold uppercase tracking-widest text-gray-500 flex items-center gap-2">
                                     <Home size={16} />
@@ -215,17 +232,18 @@ export default function SuccessPage() {
                             </div>
 
                             <div className="p-6 flex flex-col md:flex-row gap-6 items-start md:items-center">
+                                {/* GAMBAR DINAMIS DISINI */}
                                 <div className="w-full md:w-56 h-40 bg-gray-200 rounded-xl overflow-hidden border border-gray-200 shrink-0">
                                     <img
-                                        src="https://images.unsplash.com/photo-1631049307264-da0ec9d70304?q=80&w=1000"
+                                        src={roomImage} // <-- SUDAH DINAMIS
                                         className="w-full h-full object-cover"
-                                        alt="Room"
+                                        alt="Room Image"
                                     />
                                 </div>
 
                                 <div className="flex-1">
                                     <p className="text-2xl font-serif font-bold text-keenan-dark">
-                                        {booking.room_types?.name}
+                                        {roomName}
                                     </p>
                                     <p className="text-sm text-gray-500 mt-1">
                                         {getDuration()} Malam • 1 Kamar
@@ -234,7 +252,7 @@ export default function SuccessPage() {
                                     <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div className="border border-gray-200 rounded-xl p-4">
                                             <p className="text-xs text-gray-400 mb-1">Hotel</p>
-                                            <p className="font-bold text-gray-800">Keenan Living Hotel</p>
+                                            <p className="font-bold text-gray-800">{propertyName}</p>
                                         </div>
 
                                         <div className="border border-gray-200 rounded-xl p-4">
@@ -252,7 +270,7 @@ export default function SuccessPage() {
 
                     {/* RIGHT SIDE (PAYMENT SUMMARY) */}
                     <div className="lg:col-span-4">
-                        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden sticky top-6">
+                        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden sticky top-6 print-area">
                             <div className="px-6 py-4 border-b border-gray-100">
                                 <h2 className="text-sm font-bold uppercase tracking-widest text-gray-500 flex items-center gap-2">
                                     <FileText size={16} />
@@ -270,7 +288,7 @@ export default function SuccessPage() {
 
                                 <div className="flex justify-between text-sm text-gray-600">
                                     <span>Status</span>
-                                    <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold uppercase">
+                                    <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold uppercase print:border print:border-green-600">
                                         Lunas
                                     </span>
                                 </div>
@@ -294,13 +312,14 @@ export default function SuccessPage() {
                                         <span className="text-sm font-bold text-gray-600">
                                             Total Bayar
                                         </span>
-                                        <span className="text-2xl font-bold text-keenan-gold">
+                                        <span className="text-2xl font-bold text-keenan-gold print:text-black">
                                             {formatRupiah(booking.total_price)}
                                         </span>
                                     </div>
                                 </div>
 
-                                <div className="pt-4">
+                                {/* TOMBOL ACTION - DISEMBUNYIKAN SAAT PRINT */}
+                                <div className="pt-4 no-print">
                                     <button
                                         onClick={() => window.print()}
                                         className="w-full bg-keenan-dark text-white py-4 rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2 shadow-md group"
@@ -319,8 +338,8 @@ export default function SuccessPage() {
                                 </div>
                             </div>
 
-                            <div className="bg-gray-50 border-t border-gray-200 px-6 py-5 text-center">
-                                <p className="text-xs text-gray-400 leading-relaxed">
+                            <div className="bg-gray-50 border-t border-gray-200 px-6 py-5 text-center print:bg-white print:border-t-2">
+                                <p className="text-xs text-gray-400 leading-relaxed print:text-black">
                                     Bukti pembayaran ini sah dan diterbitkan oleh sistem.<br />
                                     Tunjukkan Booking Code saat Check-in di resepsionis.
                                 </p>
