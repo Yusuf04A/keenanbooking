@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api'; 
 import { useNavigate } from 'react-router-dom';
 import {
-    Search, MapPin, ArrowRight,
+    MapPin, ArrowRight,
     Wifi, Wind, Coffee, Tv, Car, Utensils, ShieldCheck
 } from 'lucide-react';
 
@@ -14,43 +14,41 @@ export default function BookingSearch() {
     const [checkIn, setCheckIn] = useState('');
     const [checkOut, setCheckOut] = useState('');
     const [guests, setGuests] = useState(1);
-    const [selectedProp, setSelectedProp] = useState('');
+    const [selectedPropId, setSelectedPropId] = useState(''); // Ubah jadi ID biar lebih akurat
 
     useEffect(() => {
         fetchProperties();
     }, []);
 
     const fetchProperties = async () => {
-        // PERBAIKAN LOGIKA 1: Tambahkan 'facilities' di dalam query room_types
-        const { data } = await supabase
-            .from('properties')
-            .select('*, room_types(base_price, facilities)');
-
-        setProperties(data || []);
-    };
-
-    const handleSearch = () => {
-        if (!selectedProp) return alert("Pilih lokasi properti dulu!");
-        const prop = properties.find(p => p.name === selectedProp);
-        if (prop) {
-            navigate(`/property/${prop.id}?checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}`);
+        try {
+            // Panggil API Laravel
+            const response = await api.get('/properties');
+            setProperties(response.data || []);
+        } catch (error) {
+            console.error("Gagal mengambil data properti:", error);
         }
     };
 
-    // PERBAIKAN LOGIKA 2: Helper Icon lebih lengkap & return JSX rapi
+    const handleSearch = () => {
+        if (!selectedPropId) return alert("Pilih lokasi properti dulu!");
+
+        // Langsung navigasi pakai ID
+        navigate(`/property/${selectedPropId}?checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}`);
+    };
+
+    // Helper Icon Fasilitas
     const getFacilityIcon = (fac: string) => {
         const f = fac.toLowerCase();
-        // Style standar untuk item fasilitas
         const style = "flex items-center gap-2 text-[10px] uppercase font-bold text-gray-500";
 
         if (f.includes('wifi') || f.includes('internet')) return <div className={style}><Wifi size={14} className="text-keenan-gold" /> Wifi</div>;
         if (f.includes('ac') || f.includes('air')) return <div className={style}><Wind size={14} className="text-keenan-gold" /> AC</div>;
-        if (f.includes('break') || f.includes('kitchen') || f.includes('pantry')) return <div className={style}><Utensils size={14} className="text-keenan-gold" /> Kitchen/Pantry</div>;
+        if (f.includes('break') || f.includes('kitchen') || f.includes('pantry')) return <div className={style}><Utensils size={14} className="text-keenan-gold" /> Kitchen</div>;
         if (f.includes('tv') || f.includes('netflix')) return <div className={style}><Tv size={14} className="text-keenan-gold" /> TV/Netflix</div>;
         if (f.includes('park')) return <div className={style}><Car size={14} className="text-keenan-gold" /> Parking</div>;
         if (f.includes('coffee')) return <div className={style}><Coffee size={14} className="text-keenan-gold" /> Coffee</div>;
 
-        // Default Icon
         return <div className={style}><ShieldCheck size={14} className="text-keenan-gold" /> {fac}</div>;
     }
 
@@ -98,11 +96,11 @@ export default function BookingSearch() {
                             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Property</label>
                             <select
                                 className="w-full p-3 bg-gray-50 border-b-2 border-transparent focus:border-keenan-gold outline-none font-serif text-lg"
-                                value={selectedProp}
-                                onChange={e => setSelectedProp(e.target.value)}
+                                value={selectedPropId}
+                                onChange={e => setSelectedPropId(e.target.value)}
                             >
                                 <option value="">Select Destination</option>
-                                {properties.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                                {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                             </select>
                         </div>
 
@@ -148,7 +146,7 @@ export default function BookingSearch() {
                             <div key={prop.id} className="group cursor-pointer bg-white flex flex-col shadow-sm hover:shadow-xl transition-shadow duration-300" onClick={() => navigate(`/property/${prop.id}`)}>
                                 <div className="h-72 overflow-hidden relative">
                                     <img
-                                        src={prop.image_url}
+                                        src={prop.image_url || "https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=2070"}
                                         alt={prop.name}
                                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                                     />
@@ -162,8 +160,9 @@ export default function BookingSearch() {
                                     <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-2 font-bold">{prop.address?.split(',')[0]}</p>
                                     <h3 className="text-xl font-serif font-bold text-keenan-dark mb-4 group-hover:text-keenan-gold transition-colors">{prop.name}</h3>
 
-                                    {/* PERBAIKAN LOGIKA 3: Render Fasilitas dari Database */}
+                                    {/* FASILITAS DARI DATABASE LARAVEL */}
                                     <div className="mt-auto pt-4 border-t border-gray-100 grid grid-cols-2 gap-y-2">
+                                        {/* Cek array room_types (snake_case di Laravel) */}
                                         {prop.room_types && prop.room_types.length > 0 && prop.room_types[0].facilities ? (
                                             prop.room_types[0].facilities.slice(0, 4).map((fac: string, idx: number) => (
                                                 <div key={idx}>

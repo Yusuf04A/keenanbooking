@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
 import {
     MapPin, Users, Wifi, Wind, Coffee, ArrowLeft, Loader2,
     Tv, Car, Utensils, Droplets, MonitorPlay, Calendar, AlertCircle
@@ -57,15 +57,14 @@ const PropertyDetails = () => {
         const fetchPropertyDetails = async () => {
             if (!id) return;
             try {
-                // Ambil Data Property + Room Types
-                const { data, error } = await supabase
-                    .from('properties')
-                    .select(`*, room_types (*)`)
-                    .eq('id', id)
-                    .single();
-
-                if (error) throw error;
-                setProperty(data);
+                // Panggil API Laravel
+                const response = await api.get(`/properties/${id}`);
+                const data = response.data;
+                
+                setProperty({
+                    ...data,
+                    room_types: data.room_types || [] // Laravel pakainya snake_case
+                });
             } catch (err) {
                 console.error("Error fetching property:", err);
             } finally {

@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api'; // <--- GANTI: Pakai API Laravel
 import { Lock, Mail, Loader2, AlertCircle, Eye, EyeOff, ArrowRight } from 'lucide-react';
 
 export default function AdminLogin() {
     const navigate = useNavigate();
 
-    // Ganti state username jadi email
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -20,33 +19,33 @@ export default function AdminLogin() {
         setError('');
 
         try {
-            // 1. Cek ke Database Supabase (Kolom sekarang 'email')
-            const { data, error } = await supabase
-                .from('admins')
-                .select('*')
-                .eq('email', email) // Cek email
-                .eq('password', password)
-                .single();
+            // 1. Request Login ke Laravel (POST /api/login)
+            const response = await api.post('/login', {
+                email: email,
+                password: password
+            });
 
-            if (error || !data) {
-                throw new Error("Email atau Password salah!");
-            }
+            const data = response.data; // { access_token, token_type, user: { ... } }
 
-            // 2. Simpan Sesi
-            localStorage.setItem('keenan_admin_token', 'secure_token_' + Date.now());
-            localStorage.setItem('keenan_admin_name', data.full_name);
-            localStorage.setItem('keenan_admin_role', data.role);
-            localStorage.setItem('keenan_admin_scope', data.scope);
+            // 2. Simpan Token & Data User di LocalStorage
+            // Token ini nanti akan otomatis dipakai 'api.ts' untuk request selanjutnya
+            localStorage.setItem('keenan_admin_token', data.access_token);
+            localStorage.setItem('keenan_admin_name', data.user.full_name);
+            localStorage.setItem('keenan_admin_role', data.user.role);
+            localStorage.setItem('keenan_admin_scope', data.user.scope);
 
-            // 3. Redirect
-            if (data.role === 'superadmin') {
+            // 3. Redirect sesuai Role
+            if (data.user.role === 'superadmin') {
                 navigate('/admin/super-dashboard'); // Redirect ke Dashboard Dewa
             } else {
                 navigate('/admin/dashboard'); // Redirect ke Dashboard Karyawan
             }
 
         } catch (err: any) {
-            setError(err.message);
+            console.error("Login Error:", err);
+            // Tampilkan pesan error dari backend Laravel (jika ada)
+            const errorMessage = err.response?.data?.message || "Login gagal. Periksa email/password atau koneksi server.";
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }

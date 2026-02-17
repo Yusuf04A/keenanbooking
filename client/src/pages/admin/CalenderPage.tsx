@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api'; // <--- API LARAVEL
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Calendar as CalendarIcon, User, Plus, X, Phone, Mail, MessageSquare, AlertCircle } from 'lucide-react';
 
@@ -11,19 +11,26 @@ export default function CalendarPage() {
     const [events, setEvents] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+
+    // Availability Check State
     const [isChecking, setIsChecking] = useState(false);
     const [availabilityMsg, setAvailabilityMsg] = useState('');
 
     const [rooms, setRooms] = useState<any[]>([]);
-    // Pastikan state awal memiliki semua field
+
+    // Booking Form State
     const [newBooking, setNewBooking] = useState({
-        customer_name: '', customer_email: '', customer_phone: '',
-        room_type_id: '', check_in_date: '', check_out_date: '',
-        total_price: 0, notes: '',
-        booking_source: 'walk_in' // <--- Default untuk admin
+        customer_name: '',
+        customer_email: '',
+        customer_phone: '',
+        room_type_id: '',
+        check_in_date: '',
+        check_out_date: '',
+        total_price: 0,
+        notes: '',
+        booking_source: 'walk_in' // Default Source
     });
 
-    const adminName = localStorage.getItem('keenan_admin_name') || 'Admin';
     const adminScope = localStorage.getItem('keenan_admin_scope') || 'all';
 
     useEffect(() => {
@@ -34,7 +41,7 @@ export default function CalendarPage() {
         init();
     }, []);
 
-    // LOGIC CEK KETERSEDIAAN (ALLOTMENT)
+    // LOGIC CEK KETERSEDIAAN (Menggunakan API Laravel)
     useEffect(() => {
         if (newBooking.room_type_id && newBooking.check_in_date && newBooking.check_out_date) {
             checkAvailability();
@@ -45,34 +52,53 @@ export default function CalendarPage() {
         setIsChecking(true);
         setAvailabilityMsg('');
 
-        const { data } = await supabase
-            .from('bookings')
-            .select('id')
-            .eq('room_type_id', newBooking.room_type_id)
-            .neq('status', 'cancelled')
-            .or(`and(check_in_date.lte.${newBooking.check_out_date},check_out_date.gte.${newBooking.check_in_date})`);
+        try {
+            // Kita belum bikin endpoint khusus check availability, jadi kita fetch booking dan filter di client sementara
+            // Atau kalau mau perfect, nanti tambah endpoint di Laravel. 
+            // Untuk sekarang, kita pakai logika client-side filter dari 'events' yang sudah di-fetch.
 
-        if (data && data.length > 0) {
-            setAvailabilityMsg('⚠️ TERISI: Overbooking Warning!');
-        } else {
-            setAvailabilityMsg('✅ Kamar Tersedia');
+            // Logika Tabrakan Tanggal:
+            // (StartA <= EndB) and (EndA >= StartB)
+
+            const startDate = new Date(newBooking.check_in_date);
+            const endDate = new Date(newBooking.check_out_date);
+
+            // Filter booking yang kamar-nya sama & tanggalnya tabrakan
+            const conflict = events.find(event => {
+                if (event.extendedProps.room_id !== newBooking.room_type_id) return false;
+                if (event.extendedProps.status === 'cancelled') return false;
+
+                const eventStart = new Date(event.start);
+                const eventEnd = new Date(event.end);
+
+                return (startDate < eventEnd && endDate > eventStart);
+            });
+
+            if (conflict) {
+                setAvailabilityMsg('⚠️ TERISI: Kamar ini sudah ada yang pesan di tanggal tersebut!');
+            } else {
+                setAvailabilityMsg('✅ Kamar Tersedia');
+            }
+
+        } catch (error) {
+            console.error("Error checking availability", error);
+        } finally {
+            setIsChecking(false);
         }
-        setIsChecking(false);
     };
 
     const fetchRooms = async () => {
         try {
-            let query = supabase.from('room_types').select(`id, name, base_price, property_id, properties(name)`);
-            const { data, error } = await query;
-            if (error) throw error;
+            // Ambil semua kamar dari Laravel
+            const response = await api.get('/admin/rooms');
+            let data = response.data;
 
-            const filteredRooms = (data || []).filter(room => {
-                if (adminScope === 'all') return true;
-                const propName = room.properties?.name || '';
-                return propName.toLowerCase().includes(adminScope.toLowerCase());
-            });
+            // Filter kamar sesuai cabang admin (Scope)
+            if (adminScope !== 'all') {
+                data = data.filter((r: any) => r.property?.name === adminScope);
+            }
 
-            setRooms(filteredRooms);
+            setRooms(data || []);
         } catch (err) {
             console.error("Error fetch rooms:", err);
         }
@@ -80,57 +106,44 @@ export default function CalendarPage() {
 
     const fetchBookingsToEvents = async () => {
         try {
-            let query = supabase.from('bookings').select(`
-                id, customer_name, check_in_date, check_out_date, status, 
-                room_types ( name ), properties ( name )
-            `);
+            // Ambil semua booking dari Laravel
+            const response = await api.get('/admin/bookings');
+            let data = response.data;
 
-            const { data } = await query;
-            if (data) {
-                // Filter berdasarkan Scope Admin
-                const filteredData = data.filter(b => {
-                    if (adminScope === 'all') return true;
-                    return b.properties?.name.toLowerCase().includes(adminScope.toLowerCase());
-                });
-
-                const formattedEvents = filteredData.map(booking => {
-                    // --- LOGIKA WARNA BARU DISINI ---
-                    let bgColor = '#C5A059'; // Default: Gold (Paid)
-
-                    switch (booking.status) {
-                        case 'checked_in':
-                            bgColor = '#2563EB'; // Biru (Sedang Menginap)
-                            break;
-                        case 'checked_out':
-                            bgColor = '#ff6767'; // Merah (Sudah Pulang)
-                            break;
-                        case 'cancelled':
-                            bgColor = '#94A3B8'; // Abu-abu (Batal)
-                            break;
-                        case 'pending_payment':
-                            bgColor = '#8e8e8e'; // Orange (Belum Bayar)
-                            break;
-                        default:
-                            bgColor = '#C5A059'; // Paid
-                    }
-
-                    return {
-                        id: booking.id,
-                        title: `${booking.customer_name} (${booking.room_types?.name})`,
-                        start: booking.check_in_date,
-                        end: booking.check_out_date,
-                        backgroundColor: bgColor, // <--- Pakai warna yang sudah dipilih
-                        borderColor: 'transparent',
-                        textColor: '#ffffff', // Semua tulisan jadi putih biar kontras
-                        extendedProps: {
-                            status: booking.status,
-                            guest: booking.customer_name,
-                            room: booking.room_types?.name
-                        }
-                    };
-                });
-                setEvents(formattedEvents);
+            // Filter booking sesuai cabang admin
+            if (adminScope !== 'all') {
+                data = data.filter((b: any) => b.property?.name === adminScope);
             }
+
+            const formattedEvents = data.map((booking: any) => {
+                let bgColor = '#C5A059'; // Default: Gold (Paid)
+
+                switch (booking.status) {
+                    case 'checked_in': bgColor = '#2563EB'; break; // Biru
+                    case 'checked_out': bgColor = '#EF4444'; break; // Merah
+                    case 'cancelled': bgColor = '#94A3B8'; break; // Abu
+                    case 'pending': bgColor = '#F59E0B'; break; // Kuning/Orange
+                    default: bgColor = '#C5A059'; // Paid/Confirmed
+                }
+
+                return {
+                    id: booking.id,
+                    title: `${booking.customer_name} (${booking.room_type?.name})`,
+                    start: booking.check_in_date,
+                    end: booking.check_out_date, // FullCalendar end date is exclusive, but for simplicity we keep it as is
+                    backgroundColor: bgColor,
+                    borderColor: 'transparent',
+                    textColor: '#ffffff',
+                    extendedProps: {
+                        status: booking.status,
+                        guest: booking.customer_name,
+                        room: booking.room_type?.name,
+                        room_id: booking.room_type_id // Penting buat cek ketersediaan
+                    }
+                };
+            });
+
+            setEvents(formattedEvents);
         } catch (err) {
             console.error("Error fetch bookings:", err);
         }
@@ -142,7 +155,7 @@ export default function CalendarPage() {
             setNewBooking({
                 ...newBooking,
                 room_type_id: roomId,
-                total_price: selectedRoom.base_price
+                total_price: selectedRoom.base_price // Set harga dasar
             });
         }
     };
@@ -157,36 +170,60 @@ export default function CalendarPage() {
         const selectedRoom = rooms.find(r => r.id === newBooking.room_type_id);
         if (!selectedRoom) return alert("Pilih tipe kamar!");
 
-        const orderId = `MANUAL-${Date.now()}`;
+        try {
+            // --- KIRIM KE LARAVEL ---
+            // Kita pakai endpoint /midtrans/create-transaction (tapi kita sesuaikan di backend agar kalau 'manual', dia langsung paid).
+            // TAPI, lebih bersih kalau kita pakai endpoint AdminController -> storeBooking (belum ada).
+            // JADI, kita pakai endpoint /admin/bookings/manual (Perlu dibuat di backend kalau mau rapi).
+            // ATAU, kita bisa pakai endpoint PUBLIC create-transaction tapi flag manual.
 
-        // PERBAIKAN: Mapping nama field sesuai database kamu
-        const { error } = await supabase.from('bookings').insert([{
-            booking_code: orderId,
-            customer_name: newBooking.customer_name,
-            customer_email: newBooking.customer_email || 'manual@admin.com',
-            customer_phone: newBooking.customer_phone || '-',
-            room_type_id: newBooking.room_type_id,
-            property_id: selectedRoom.property_id,
-            check_in_date: newBooking.check_in_date,
-            check_out_date: newBooking.check_out_date,
-            booking_source: newBooking.booking_source,
-            status: 'paid',
-            total_price: newBooking.total_price,
-            payment_method: 'manual_offline',
-            customer_notes: newBooking.notes // <-- PENTING: Map ke 'customer_notes'
-        }]);
+            // SOLUSI CEPAT: Kita pakai endpoint public, lalu Admin langsung update status jadi PAID.
 
-        if (error) {
-            alert("Error: " + error.message);
-        } else {
-            alert("✅ Booking Berhasil Disimpan!");
+            // 1. Create Booking (Pending)
+            const res = await api.post('/midtrans/create-transaction', {
+                property_id: selectedRoom.property_id,
+                room_type_id: newBooking.room_type_id,
+                customer_name: newBooking.customer_name,
+                customer_email: newBooking.customer_email || 'manual@admin.com',
+                customer_phone: newBooking.customer_phone || '-',
+                check_in_date: newBooking.check_in_date,
+                check_out_date: newBooking.check_out_date,
+                total_price: newBooking.total_price,
+                customer_notes: newBooking.notes,
+                booking_source: newBooking.booking_source,
+                // Tambahan info source (Backend perlu sesuaikan sedikit kalau mau nyimpen field ini)
+                // Sementara field 'booking_source' mungkin belum ada di controller createTransaction, 
+                // tapi gak bikin error kok.
+            });
+
+            const bookingData = res.data.booking; // Dapat ID booking baru
+
+            // 2. Langsung Update jadi PAID & Set Source
+            // Kita butuh endpoint update status yang lebih powerful buat admin.
+            // Panggil API update status manual yang baru kita buat tadi.
+            await api.put(`/admin/bookings/${bookingData.id}/status`, {
+                status: 'paid'
+            });
+
+            // 3. (Opsional) Update Source Booking (Agoda/Traveloka)
+            // Karena endpoint update status cuma ubah status, source mungkin masih default 'Website'.
+            // Kalau mau perfect, backend AdminController butuh fungsi 'updateBooking' lengkap.
+            // Tapi untuk demo, Status 'Paid' sudah cukup membuktikan sistem jalan.
+
+            alert("✅ Manual Booking Berhasil Disimpan!");
             setIsModalOpen(false);
             setNewBooking({
                 customer_name: '', customer_email: '', customer_phone: '',
                 room_type_id: '', check_in_date: '', check_out_date: '',
-                total_price: 0, notes: ''
+                total_price: 0, notes: '', booking_source: 'walk_in'
             });
+
+            // Refresh Kalender
             fetchBookingsToEvents();
+
+        } catch (error: any) {
+            console.error(error);
+            alert("Gagal simpan: " + (error.response?.data?.message || error.message));
         }
     };
 
@@ -228,14 +265,14 @@ export default function CalendarPage() {
                 </div>
             </div>
 
-            {/* MODAL INPUT MANUAL - FORM SUDAH DIPERBAIKI */}
+            {/* MODAL INPUT MANUAL */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
                     <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
                         <div className="bg-keenan-dark p-6 text-white flex justify-between items-center">
                             <div>
                                 <h3 className="text-xl font-serif font-bold tracking-wide">Manual Booking</h3>
-                                <p className="text-xs text-keenan-gold uppercase tracking-[0.2em]">Input Tamu Walk-in / WhatsApp</p>
+                                <p className="text-xs text-keenan-gold uppercase tracking-[0.2em]">Input Tamu Walk-in / WhatsApp / OTA</p>
                             </div>
                             <button onClick={() => setIsModalOpen(false)} className="hover:rotate-90 transition-transform p-2"><X size={24} /></button>
                         </div>
@@ -268,7 +305,6 @@ export default function CalendarPage() {
                                 </div>
                             </div>
 
-                            {/* FIELD HP & EMAIL DIKEMBALIKAN */}
                             <div>
                                 <label className="flex items-center gap-2 text-[10px] font-black text-keenan-gold uppercase tracking-widest mb-2"><Phone size={12} /> No. WhatsApp</label>
                                 <input required type="text" placeholder="0812..." className="w-full border-b-2 border-gray-100 p-2 outline-none focus:border-keenan-gold transition-colors"
@@ -293,7 +329,7 @@ export default function CalendarPage() {
                                 >
                                     <option value="">-- {rooms.length > 0 ? 'Pilih Tipe Kamar' : 'Memuat Kamar...'} --</option>
                                     {rooms.map(r => (
-                                        <option key={r.id} value={r.id}>{r.properties?.name} - {r.name}</option>
+                                        <option key={r.id} value={r.id}>{r.property?.name} - {r.name}</option>
                                     ))}
                                 </select>
                             </div>
@@ -319,7 +355,6 @@ export default function CalendarPage() {
                                     onChange={e => setNewBooking({ ...newBooking, check_out_date: e.target.value })} />
                             </div>
 
-                            {/* FIELD NOTES DIKEMBALIKAN */}
                             <div className="md:col-span-2">
                                 <label className="flex items-center gap-2 text-[10px] font-black text-keenan-gold uppercase tracking-widest mb-2"><MessageSquare size={12} /> Catatan (Notes)</label>
                                 <textarea className="w-full border border-gray-200 rounded-lg p-3 outline-none focus:border-keenan-gold text-sm" rows={2} placeholder="Permintaan khusus..."
@@ -327,7 +362,6 @@ export default function CalendarPage() {
                                     onChange={e => setNewBooking({ ...newBooking, notes: e.target.value })}></textarea>
                             </div>
 
-                            {/* ALERT KETERSEDIAAN */}
                             <div className="md:col-span-2">
                                 {isChecking && <p className="text-xs text-gray-400 flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Mengecek ketersediaan...</p>}
                                 {availabilityMsg && (

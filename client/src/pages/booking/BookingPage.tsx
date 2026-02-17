@@ -1,11 +1,12 @@
+import { api } from '../../lib/api';
 import { sendWhatsAppInvoice } from '../../lib/fonnte';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+// HAPUS IMPORT SUPABASE
 import {
-    Loader2, Calendar, User, AlertCircle, CheckCircle,
-    Wifi, Wind, Coffee, MessageSquare, Star,
-    ShieldCheck, ArrowLeft, Mail, Phone, ChevronRight, Tag, Home
+    Loader2, User, AlertCircle, CheckCircle,
+    Wifi, Coffee, Home,
+    ArrowLeft, Mail, Phone, ChevronRight, CreditCard
 } from 'lucide-react';
 
 export default function BookingPage() {
@@ -27,11 +28,9 @@ export default function BookingPage() {
 
     // 2. State Management
     const [loading, setLoading] = useState(false);
-    const [isChecking, setIsChecking] = useState(false);
-    const [availabilityStatus, setAvailabilityStatus] = useState<'idle' | 'available' | 'unavailable'>('idle');
 
-    // HAPUS state successData, karena kita akan redirect ke SuccessPage
-    // const [successData, setSuccessData] = useState<any>(null); 
+    // Kita hapus isChecking real-time karena sekarang validasi ada di backend saat klik bayar
+    // const [availabilityStatus, setAvailabilityStatus] = useState<'idle' | 'available' | 'unavailable'>('idle');
 
     const [formData, setFormData] = useState({
         name: '', email: '', phone: '',
@@ -40,55 +39,11 @@ export default function BookingPage() {
         notes: ''
     });
 
-    // 3. Cek Ketersediaan Awal & Saat Tanggal Berubah
-    useEffect(() => {
-        if (room && formData.checkIn && formData.checkOut) {
-            checkAvailability(formData.checkIn, formData.checkOut);
-        }
-    }, [formData.checkIn, formData.checkOut, room]);
-
     const handleDateChange = (field: string, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
-    const checkAvailability = async (inDate: string, outDate: string) => {
-        if (!room) return;
-        setIsChecking(true);
-        setAvailabilityStatus('idle');
-
-        try {
-            const { data: roomData } = await supabase
-                .from('room_types')
-                .select('total_stock')
-                .eq('id', room.id)
-                .single();
-
-            const maxStock = roomData?.total_stock || 1;
-
-            const { count, error } = await supabase
-                .from('bookings')
-                .select('id', { count: 'exact', head: true })
-                .eq('room_type_id', room.id)
-                .neq('status', 'cancelled')
-                .or(`and(check_in_date.lt.${outDate},check_out_date.gt.${inDate})`);
-
-            if (error) throw error;
-
-            const bookedCount = count || 0;
-            if (bookedCount >= maxStock) {
-                setAvailabilityStatus('unavailable');
-            } else {
-                setAvailabilityStatus('available');
-            }
-
-        } catch (err) {
-            console.error("Cek ketersediaan error:", err);
-        } finally {
-            setIsChecking(false);
-        }
-    };
-
-    // 4. Hitung Total Harga
+    // 3. Hitung Total Harga
     const calculateTotal = () => {
         if (!formData.checkIn || !formData.checkOut) return 0;
         const start = new Date(formData.checkIn);
@@ -98,36 +53,36 @@ export default function BookingPage() {
         return nights > 0 ? nights * room.base_price : room.base_price;
     };
 
-    // 5. Proses Pembayaran
+    // 4. Proses Pembayaran (Full Laravel API)
     const handlePayment = async () => {
+        // Validasi Form Frontend
         if (!formData.name || !formData.phone || !formData.email) {
             return alert("Mohon lengkapi data diri Anda!");
-        }
-        if (availabilityStatus !== 'available') {
-            return alert("Maaf, kamar tidak tersedia di tanggal tersebut.");
         }
 
         setLoading(true);
         const finalTotalPrice = calculateTotal();
 
         try {
-            const bookingCode = `KNA-${Date.now()}`;
-            const response = await fetch('http://localhost:5000/api/midtrans/create-transaction', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    orderId: bookingCode,
-                    amount: finalTotalPrice,
-                    customerDetails: {
-                        first_name: formData.name,
-                        email: formData.email,
-                        phone: formData.phone
-                    }
-                })
+            // A. Request ke Laravel: Buat Transaksi & Dapat Token
+            // Laravel akan otomatis: Simpan Booking (status pending) & Minta Token Midtrans
+            // Jika kamar penuh atau ada error lain, Laravel akan melempar error di sini (catch block)
+            const response = await api.post('/midtrans/create-transaction', {
+                property_id: room.property_id,
+                room_type_id: room.id,
+                customer_name: formData.name,
+                customer_email: formData.email,
+                customer_phone: formData.phone,
+                check_in_date: formData.checkIn,
+                check_out_date: formData.checkOut,
+                total_price: finalTotalPrice,
+                customer_notes: formData.notes
             });
 
-            const { token } = await response.json();
+            // Ambil token & data booking dari respon Laravel
+            const { token, booking } = response.data;
 
+            // B. Munculkan Snap Midtrans
             // @ts-ignore
             window.snap.pay(token, {
                 onSuccess: async function (result: any) {
@@ -135,34 +90,18 @@ export default function BookingPage() {
                     const midtransPdf = result.pdf_url || "";
 
                     try {
-                        // 1. Simpan DB
-                        const { data: bookingData, error } = await supabase
-                            .from('bookings')
-                            .insert([{
-                                property_id: room.property_id,
-                                room_type_id: room.id,
-                                booking_code: bookingCode,
-                                check_in_date: formData.checkIn,
-                                check_out_date: formData.checkOut,
-                                total_price: finalTotalPrice,
-                                status: 'paid',
-                                customer_name: formData.name,
-                                customer_email: formData.email,
-                                customer_phone: formData.phone,
-                                customer_notes: formData.notes,
-                                booking_source: 'website',
-                                payment_method: result.payment_type
-                            }])
-                            .select()
-                            .single();
+                        // C. Lapor ke Laravel kalau sudah bayar (Update Status jadi Paid)
+                        await api.post('/bookings/update-status', {
+                            order_id: result.order_id,
+                            payment_type: result.payment_type,
+                            transaction_status: result.transaction_status
+                        });
 
-                        if (error) throw error;
-
-                        // 2. Kirim WA
+                        // D. Kirim WA
                         await sendWhatsAppInvoice(
                             formData.phone,
                             formData.name,
-                            bookingCode,
+                            booking.booking_code,
                             propertyName,
                             room.name,
                             formData.checkIn,
@@ -171,17 +110,17 @@ export default function BookingPage() {
                             midtransPdf
                         );
 
-                        // 3. REDIRECT KE SUCCESS PAGE (Logika dikembalikan)
+                        // E. Pindah ke Halaman Sukses
                         navigate('/success', {
                             state: {
-                                booking: bookingData,
+                                booking: { ...booking, room_types: room },
                                 pdfUrl: midtransPdf
                             }
                         });
 
-                    } catch (dbError: any) {
-                        console.error("Database/WA Error:", dbError);
-                        alert("Pembayaran berhasil, namun gagal menyimpan data. Hubungi Admin.");
+                    } catch (err) {
+                        console.error("Update Status Error:", err);
+                        alert("Pembayaran berhasil, tapi update status gagal. Hubungi admin.");
                     }
                 },
                 onPending: function () { alert("Menunggu pembayaran..."); },
@@ -189,9 +128,13 @@ export default function BookingPage() {
                 onClose: function () { alert('Transaksi dibatalkan.'); }
             });
 
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            alert("Gagal memproses pembayaran (Server Error).");
+            // Tampilkan pesan error dari Laravel jika ada
+            const errMsg = error.response?.data?.message || "Gagal memproses pembayaran.";
+
+            // Handle pesan spesifik dari backend jika ada validasi
+            alert("Gagal: " + errMsg);
         } finally {
             setLoading(false);
         }
@@ -334,15 +277,9 @@ export default function BookingPage() {
                                     ></textarea>
                                 </div>
 
-                                {/* Availability Status */}
+                                {/* Availability Info (Static for now to remove Supabase logic) */}
                                 <div className="mt-4">
-                                    {isChecking && <p className="text-sm text-gray-400 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Mengecek ketersediaan...</p>}
-                                    {availabilityStatus === 'unavailable' && (
-                                        <p className="text-sm text-red-500 flex items-center gap-2 font-bold"><AlertCircle size={14} /> Kamar penuh di tanggal ini.</p>
-                                    )}
-                                    {availabilityStatus === 'available' && !isChecking && (
-                                        <p className="text-sm text-green-600 flex items-center gap-2 font-bold"><CheckCircle size={14} /> Kamar tersedia!</p>
-                                    )}
+                                    <p className="text-xs text-gray-400 flex items-center gap-2"><AlertCircle size={12} /> Ketersediaan akan dikonfirmasi saat pembayaran.</p>
                                 </div>
                             </div>
                         </div>
@@ -385,11 +322,8 @@ export default function BookingPage() {
                             <div className="p-4 bg-gray-50">
                                 <button
                                     onClick={handlePayment}
-                                    disabled={loading || availabilityStatus !== 'available'}
-                                    className={`w-full py-4 rounded-lg font-bold text-white shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2 ${availabilityStatus === 'available'
-                                            ? 'bg-keenan-gold hover:bg-yellow-600'
-                                            : 'bg-gray-300 cursor-not-allowed'
-                                        }`}
+                                    disabled={loading}
+                                    className="w-full py-4 rounded-lg font-bold text-white shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2 bg-keenan-gold hover:bg-yellow-600"
                                 >
                                     {loading ? <Loader2 className="animate-spin" /> : "Lanjutkan Pembayaran"}
                                 </button>

@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api'; // <--- GANTI: PAKE API LARAVEL
 import { useNavigate } from 'react-router-dom';
 import {
-    LayoutDashboard, LogOut, Calendar, Search,
+    LayoutDashboard, LogOut as LogOutIcon, Calendar, Search,
     CheckCircle, XCircle, Clock, Loader2, User,
-    LogIn, LogOut as LogOutIcon, X, Globe, Smartphone,
-    Printer, Phone, Mail, MapPin, CalendarDays, MessageSquare,
-    CreditCard, ShieldCheck
+    LogIn, X, Globe, Smartphone,
+    Printer, Phone, Mail, MapPin, MessageSquare,
+    CreditCard
 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -14,6 +14,8 @@ export default function AdminDashboard() {
     const [bookings, setBookings] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
+
+    // User State
     const [adminName, setAdminName] = useState('');
     const [scope, setScope] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
@@ -23,32 +25,38 @@ export default function AdminDashboard() {
     const [isUpdating, setIsUpdating] = useState(false);
 
     useEffect(() => {
-        const name = localStorage.getItem('keenan_admin_name') || 'Admin';
+        // 1. Cek LocalStorage
+        const role = localStorage.getItem('keenan_admin_role');
+        const name = localStorage.getItem('keenan_admin_name') || 'Staff';
         const adminScope = localStorage.getItem('keenan_admin_scope') || 'all';
+
+        // Redirect jika Superadmin nyasar kesini
+        if (role === 'superadmin') {
+            navigate('/superadmin/dashboard');
+            return;
+        }
+
         setAdminName(name);
         setScope(adminScope);
+
+        // 2. Fetch Data
         fetchBookings(adminScope);
-    }, []);
+    }, [navigate]);
 
     const fetchBookings = async (adminScope: string) => {
         setLoading(true);
         try {
-            let query = supabase
-                .from('bookings')
-                .select(`*, room_types ( name ), properties ( id, name )`)
-                .order('created_at', { ascending: false });
+            // Panggil API Laravel
+            const response = await api.get('/admin/bookings');
+            let data = response.data;
 
-            const { data, error } = await query;
-            if (error) throw error;
+            // FILTER DATA CLIENT-SIDE SESUAI SCOPE STAFF
+            // Jika scope bukan 'all', hanya tampilkan booking milik cabang hotel tersebut
+            if (adminScope && adminScope !== 'all') {
+                data = data.filter((b: any) => b.property?.name === adminScope);
+            }
 
-            const allBookings = data || [];
-            const filteredData = allBookings.filter(booking => {
-                if (adminScope === 'all') return true;
-                const propertyName = booking.properties?.name || '';
-                return propertyName.toLowerCase().includes(adminScope.toLowerCase());
-            });
-
-            setBookings(filteredData);
+            setBookings(data || []);
         } catch (error) {
             console.error("Error fetching bookings:", error);
         } finally {
@@ -57,39 +65,42 @@ export default function AdminDashboard() {
     };
 
     const getSourceCount = (sourceName: string) => {
-        return bookings.filter(b => (b.booking_source || 'website') === sourceName).length;
+        return bookings.filter(b => (b.booking_source || 'website').toLowerCase() === sourceName.toLowerCase()).length;
     };
 
+    // UPDATE STATUS PAKE API LARAVEL
     const handleStatusUpdate = async (newStatus: string) => {
         if (!selectedBooking) return;
         setIsUpdating(true);
 
         try {
-            const { error } = await supabase
-                .from('bookings')
-                .update({ status: newStatus })
-                .eq('id', selectedBooking.id);
+            // Request ke Laravel
+            await api.put(`/admin/bookings/${selectedBooking.id}/status`, { status: newStatus });
 
-            if (error) throw error;
-
+            // Update State Lokal (Biar gak perlu refresh/fetch ulang)
             const updatedBookings = bookings.map(b =>
                 b.id === selectedBooking.id ? { ...b, status: newStatus } : b
             );
+
             setBookings(updatedBookings);
             setSelectedBooking({ ...selectedBooking, status: newStatus });
 
-            alert(`Berhasil ubah status menjadi: ${newStatus.toUpperCase()}`);
+            alert(`Berhasil ubah status menjadi: ${newStatus.toUpperCase().replace('_', ' ')}`);
+
+            // Kalau Check-Out, tutup modal
             if (newStatus === 'checked_out') setSelectedBooking(null);
 
         } catch (err: any) {
-            alert("Gagal update: " + err.message);
+            console.error(err);
+            alert("Gagal update status.");
         } finally {
             setIsUpdating(false);
         }
     };
 
-    const handleLogout = () => {
-        localStorage.removeItem('keenan_admin_token');
+    const handleLogout = async () => {
+        try { await api.post('/logout'); } catch (e) { }
+        localStorage.clear();
         navigate('/admin/login');
     };
 
@@ -100,9 +111,10 @@ export default function AdminDashboard() {
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'paid': return <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 w-fit"><CheckCircle size={12} /> PAID / CONFIRMED</span>;
+            case 'confirmed': return <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 w-fit"><CheckCircle size={12} /> PAID / CONFIRMED</span>;
             case 'checked_in': return <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 w-fit"><LogIn size={12} /> CHECKED IN</span>;
             case 'checked_out': return <span className="bg-gray-200 text-gray-600 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 w-fit"><LogOutIcon size={12} /> CHECKED OUT</span>;
-            case 'pending_payment': return <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 w-fit"><Clock size={12} /> PENDING</span>;
+            case 'pending': return <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 w-fit"><Clock size={12} /> PENDING</span>;
             case 'cancelled': return <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 w-fit"><XCircle size={12} /> CANCELLED</span>;
             default: return <span className="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-xs font-bold">{status}</span>;
         }
@@ -117,6 +129,7 @@ export default function AdminDashboard() {
         return <span className="text-[10px] font-bold px-2 py-1 bg-keenan-gold/10 text-keenan-gold rounded border border-keenan-gold/20 flex items-center gap-1"><Globe size={10} /> WEBSITE</span>;
     };
 
+    // Filter Logic untuk Tampilan Tabel
     const displayBookings = bookings.filter(b => {
         const matchesStatus = filter === 'all' || b.status === filter;
         const searchLower = searchTerm.toLowerCase();
@@ -173,7 +186,7 @@ export default function AdminDashboard() {
                 {/* Filter & Search */}
                 <div className="bg-white p-4 rounded-xl shadow-sm mb-6 flex flex-wrap gap-4 justify-between items-center border border-gray-100">
                     <div className="flex gap-2">
-                        {['all', 'paid', 'checked_in', 'checked_out', 'pending_payment'].map((stat) => (
+                        {['all', 'paid', 'checked_in', 'checked_out', 'pending'].map((stat) => (
                             <button key={stat} onClick={() => setFilter(stat)}
                                 className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${filter === stat ? 'bg-keenan-dark text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
                                 {stat.replace('_', ' ')}
@@ -215,8 +228,9 @@ export default function AdminDashboard() {
                                             <p className="text-[10px] text-gray-400 font-normal">{booking.customer_phone}</p>
                                         </td>
                                         <td className="p-6">
-                                            <p className="font-bold text-xs">{booking.room_types?.name}</p>
-                                            <p className="text-[10px] text-gray-400 uppercase">{booking.properties?.name}</p>
+                                            {/* PERBAIKAN: Gunakan optional chaining untuk Laravel relation (singular/camelCase) */}
+                                            <p className="font-bold text-xs">{booking.room_type?.name}</p>
+                                            <p className="text-[10px] text-gray-400 uppercase">{booking.property?.name}</p>
                                         </td>
                                         <td className="p-6 text-gray-500 text-xs">
                                             {new Date(booking.check_in_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })} - {new Date(booking.check_out_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}
@@ -233,7 +247,6 @@ export default function AdminDashboard() {
             {/* --- MODAL DETAIL (WIDE SCREEN EDITION) --- */}
             {selectedBooking && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in zoom-in duration-200">
-                    {/* LEBARKAN MAX-WIDTH DISINI: max-w-5xl */}
                     <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row max-h-[90vh]">
 
                         {/* KOLOM KIRI: GUEST PROFILE (35%) */}
@@ -290,8 +303,8 @@ export default function AdminDashboard() {
                                     <div className="flex items-start gap-3">
                                         <div className="bg-keenan-gold/10 p-3 rounded-xl text-keenan-gold"><MapPin size={20} /></div>
                                         <div>
-                                            <p className="font-bold text-keenan-dark text-lg">{selectedBooking.properties?.name}</p>
-                                            <p className="text-sm text-gray-500">{selectedBooking.room_types?.name}</p>
+                                            <p className="font-bold text-keenan-dark text-lg">{selectedBooking.property?.name}</p>
+                                            <p className="text-sm text-gray-500">{selectedBooking.room_type?.name}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -328,12 +341,15 @@ export default function AdminDashboard() {
                                 {selectedBooking.status === 'paid' && (
                                     <button onClick={() => handleStatusUpdate('checked_in')} disabled={isUpdating} className="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center gap-2"><LogIn size={18} /> Process Check-In</button>
                                 )}
+                                {selectedBooking.status === 'confirmed' && (
+                                    <button onClick={() => handleStatusUpdate('checked_in')} disabled={isUpdating} className="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center gap-2"><LogIn size={18} /> Process Check-In</button>
+                                )}
                                 {selectedBooking.status === 'checked_in' && (
                                     <button onClick={() => handleStatusUpdate('checked_out')} disabled={isUpdating} className="flex-1 bg-green-600 text-white py-4 rounded-xl font-bold hover:bg-green-700 transition-all shadow-lg flex items-center justify-center gap-2"><LogOutIcon size={18} /> Process Check-Out</button>
                                 )}
 
                                 {selectedBooking.status !== 'cancelled' && (
-                                    <button onClick={() => window.open(`/admin/invoice/${selectedBooking.id}`, '_blank')} className="px-6 bg-white border-2 border-gray-200 rounded-xl font-bold text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2 transition-all">
+                                    <button onClick={() => window.print()} className="px-6 bg-white border-2 border-gray-200 rounded-xl font-bold text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2 transition-all">
                                         <Printer size={20} /> Print
                                     </button>
                                 )}
