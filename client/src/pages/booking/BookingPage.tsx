@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 import {
     Loader2, Calendar, User, AlertCircle, CheckCircle,
     Wifi, Wind, Coffee, MessageSquare, Star,
-    Printer, Home, Check
+    ShieldCheck, ArrowLeft, Mail, Phone, ChevronRight, Tag, Home
 } from 'lucide-react';
 
 export default function BookingPage() {
@@ -29,7 +29,9 @@ export default function BookingPage() {
     const [loading, setLoading] = useState(false);
     const [isChecking, setIsChecking] = useState(false);
     const [availabilityStatus, setAvailabilityStatus] = useState<'idle' | 'available' | 'unavailable'>('idle');
-    const [successData, setSuccessData] = useState<any>(null); // Untuk tampilan sukses
+
+    // HAPUS state successData, karena kita akan redirect ke SuccessPage
+    // const [successData, setSuccessData] = useState<any>(null); 
 
     const [formData, setFormData] = useState({
         name: '', email: '', phone: '',
@@ -47,7 +49,6 @@ export default function BookingPage() {
 
     const handleDateChange = (field: string, value: string) => {
         setFormData(prev => ({ ...prev, [field]: value }));
-        // useEffect di atas akan otomatis menjalankan checkAvailability
     };
 
     const checkAvailability = async (inDate: string, outDate: string) => {
@@ -56,7 +57,6 @@ export default function BookingPage() {
         setAvailabilityStatus('idle');
 
         try {
-            // Ambil Stok Master
             const { data: roomData } = await supabase
                 .from('room_types')
                 .select('total_stock')
@@ -65,7 +65,6 @@ export default function BookingPage() {
 
             const maxStock = roomData?.total_stock || 1;
 
-            // Hitung Booking yang bertabrakan (Overlap)
             const { count, error } = await supabase
                 .from('bookings')
                 .select('id', { count: 'exact', head: true })
@@ -76,8 +75,6 @@ export default function BookingPage() {
             if (error) throw error;
 
             const bookedCount = count || 0;
-            console.log(`Stok: ${maxStock}, Terpakai: ${bookedCount}`);
-
             if (bookedCount >= maxStock) {
                 setAvailabilityStatus('unavailable');
             } else {
@@ -91,15 +88,13 @@ export default function BookingPage() {
         }
     };
 
-    // 4. Hitung Total Harga Secara Real-time
+    // 4. Hitung Total Harga
     const calculateTotal = () => {
         if (!formData.checkIn || !formData.checkOut) return 0;
         const start = new Date(formData.checkIn);
         const end = new Date(formData.checkOut);
         const diffTime = end.getTime() - start.getTime();
         const nights = Math.ceil(diffTime / (1000 * 3600 * 24));
-
-        // Minimal 1 malam, cegah minus
         return nights > 0 ? nights * room.base_price : room.base_price;
     };
 
@@ -113,20 +108,16 @@ export default function BookingPage() {
         }
 
         setLoading(true);
-        // Hitung total harga final berdasarkan inputan tanggal terkini
         const finalTotalPrice = calculateTotal();
 
         try {
-            // A. Generate Kode Booking
             const bookingCode = `KNA-${Date.now()}`;
-
-            // B. Request Token ke Backend (Midtrans)
             const response = await fetch('http://localhost:5000/api/midtrans/create-transaction', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     orderId: bookingCode,
-                    amount: finalTotalPrice, // Gunakan harga hasil kalkulasi terbaru
+                    amount: finalTotalPrice,
                     customerDetails: {
                         first_name: formData.name,
                         email: formData.email,
@@ -137,7 +128,6 @@ export default function BookingPage() {
 
             const { token } = await response.json();
 
-            // C. Munculkan Snap Midtrans
             // @ts-ignore
             window.snap.pay(token, {
                 onSuccess: async function (result: any) {
@@ -145,21 +135,21 @@ export default function BookingPage() {
                     const midtransPdf = result.pdf_url || "";
 
                     try {
-                        // D. Simpan ke Database
+                        // 1. Simpan DB
                         const { data: bookingData, error } = await supabase
                             .from('bookings')
                             .insert([{
                                 property_id: room.property_id,
                                 room_type_id: room.id,
                                 booking_code: bookingCode,
-                                check_in_date: formData.checkIn,   // Gunakan tanggal dari Form
-                                check_out_date: formData.checkOut, // Gunakan tanggal dari Form
+                                check_in_date: formData.checkIn,
+                                check_out_date: formData.checkOut,
                                 total_price: finalTotalPrice,
-                                status: 'paid', // Atau 'confirmed'
+                                status: 'paid',
                                 customer_name: formData.name,
                                 customer_email: formData.email,
                                 customer_phone: formData.phone,
-                                customer_notes: formData.notes, // Simpan Notes
+                                customer_notes: formData.notes,
                                 booking_source: 'website',
                                 payment_method: result.payment_type
                             }])
@@ -168,33 +158,35 @@ export default function BookingPage() {
 
                         if (error) throw error;
 
-                        // E. Kirim WhatsApp
-                        console.log("Sending WhatsApp...");
+                        // 2. Kirim WA
                         await sendWhatsAppInvoice(
                             formData.phone,
                             formData.name,
                             bookingCode,
                             propertyName,
                             room.name,
-                            formData.checkIn,  // Tanggal Form
-                            formData.checkOut, // Tanggal Form
+                            formData.checkIn,
+                            formData.checkOut,
                             finalTotalPrice,
                             midtransPdf
                         );
 
-                        // F. Update State untuk Menampilkan Halaman Sukses
-                        setSuccessData(bookingData);
-                        // Scroll ke atas agar user melihat pesan sukses
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        // 3. REDIRECT KE SUCCESS PAGE (Logika dikembalikan)
+                        navigate('/success', {
+                            state: {
+                                booking: bookingData,
+                                pdfUrl: midtransPdf
+                            }
+                        });
 
                     } catch (dbError: any) {
                         console.error("Database/WA Error:", dbError);
-                        alert("Pembayaran berhasil, namun gagal menyimpan data. Mohon screenshot ini dan hubungi Admin.");
+                        alert("Pembayaran berhasil, namun gagal menyimpan data. Hubungi Admin.");
                     }
                 },
-                onPending: function (result: any) { alert("Menunggu pembayaran..."); },
-                onError: function (result: any) { alert("Pembayaran gagal!"); },
-                onClose: function () { alert('Anda menutup popup pembayaran sebelum menyelesaikan transaksi.'); }
+                onPending: function () { alert("Menunggu pembayaran..."); },
+                onError: function () { alert("Pembayaran gagal!"); },
+                onClose: function () { alert('Transaksi dibatalkan.'); }
             });
 
         } catch (error) {
@@ -208,232 +200,208 @@ export default function BookingPage() {
     if (!room) return null;
 
     return (
-        <div className="min-h-screen bg-[#FAFAFA] font-sans pb-20 pt-10">
-            <div className="container mx-auto px-4 lg:px-20 max-w-5xl">
+        <div className="min-h-screen bg-[#F5F6FA] font-sans text-gray-800">
 
-                {/* --- STEPPER INDICATOR --- */}
-                <div className="flex items-center justify-center gap-4 text-sm font-bold text-gray-400 mb-10">
-                    <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center text-xs">✓</div>
-                        <span className="text-gray-800">Select Room</span>
-                    </div>
-                    <div className={`w-10 h-[1px] ${successData ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-
-                    <div className="flex items-center gap-2">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${successData ? 'bg-green-500 text-white' : 'bg-keenan-gold text-white'}`}>
-                            {successData ? '✓' : '2'}
-                        </div>
-                        <span className={successData ? 'text-gray-800' : 'text-keenan-dark'}>Details & Payment</span>
+            {/* --- HEADER (Clean White) --- */}
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+                <div className="container mx-auto px-4 lg:px-8 max-w-7xl h-16 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={() => navigate(-1)}
+                            className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-600"
+                        >
+                            <ArrowLeft size={20} />
+                        </button>
+                        <h1 className="text-lg font-bold text-gray-800">Booking Confirmation</h1>
                     </div>
 
-                    <div className={`w-10 h-[1px] ${successData ? 'bg-keenan-gold' : 'bg-gray-300'}`}></div>
-
-                    <div className="flex items-center gap-2">
-                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs ${successData ? 'bg-keenan-gold border-keenan-gold text-white' : 'border-gray-300 text-gray-300'}`}>3</div>
-                        <span className={successData ? 'text-keenan-dark' : 'text-gray-300'}>Confirmation</span>
+                    {/* Stepper Simple */}
+                    <div className="hidden md:flex items-center gap-2 text-xs font-medium">
+                        <span className="text-gray-400">1. Cari</span>
+                        <ChevronRight size={12} className="text-gray-300" />
+                        <span className="text-keenan-gold font-bold">2. Booking</span>
+                        <ChevronRight size={12} className="text-gray-300" />
+                        <span className="text-gray-400">3. Selesai</span>
                     </div>
                 </div>
+            </div>
 
-                {/* --- LOGIC TAMPILAN --- */}
-                {successData ? (
-                    // --- STEP 3: SUCCESS VIEW (INVOICE) ---
-                    <div className="bg-white p-10 rounded-3xl shadow-xl border border-gray-100 text-center max-w-3xl mx-auto animate-in fade-in zoom-in duration-500">
-                        <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <Check size={40} strokeWidth={4} />
-                        </div>
-                        <h2 className="text-3xl font-serif font-bold text-keenan-dark mb-2">Booking Confirmed!</h2>
-                        <p className="text-gray-500 mb-8">Terima kasih, pesanan Anda telah kami terima.</p>
+            <div className="container mx-auto px-4 lg:px-8 max-w-7xl py-8">
 
-                        <div className="bg-gray-50 p-8 rounded-2xl border border-gray-100 text-left mb-8">
-                            <div className="flex justify-between items-center border-b border-gray-200 pb-4 mb-4">
-                                <div>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Booking Code</p>
-                                    <p className="text-xl font-mono font-bold text-keenan-dark">{successData.booking_code}</p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total Paid</p>
-                                    <p className="text-xl font-bold text-keenan-gold">
-                                        {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(successData.total_price)}
-                                    </p>
-                                </div>
+                {/* --- MAIN FORM LAYOUT (Grid System) --- */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+                    {/* LEFT COLUMN (Formulir) - Lebar 8/12 */}
+                    <div className="lg:col-span-8 space-y-6">
+
+                        {/* SECTION 1: Detail Pemesan */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center gap-2">
+                                <User className="text-keenan-gold" size={18} />
+                                <h2 className="font-bold text-gray-800 text-lg">Detail Pemesan</h2>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-6">
+                            <div className="p-6 space-y-5">
                                 <div>
-                                    <p className="text-xs text-gray-400 font-bold uppercase mb-1">Guest Name</p>
-                                    <p className="font-semibold">{successData.customer_name}</p>
+                                    <label className="block text-sm font-bold text-gray-500 mb-1.5 ml-1">Nama Lengkap</label>
+                                    <input
+                                        required
+                                        type="text"
+                                        placeholder="Isi sesuai KTP / Paspor / SIM"
+                                        className="w-full p-3 bg-white rounded-lg border border-gray-300 focus:border-keenan-gold focus:ring-1 focus:ring-keenan-gold outline-none transition-all text-gray-800"
+                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                    />
+                                    <p className="text-xs text-gray-400 mt-1 ml-1">Tanpa gelar dan tanda baca.</p>
                                 </div>
-                                <div>
-                                    <p className="text-xs text-gray-400 font-bold uppercase mb-1">Property</p>
-                                    <p className="font-semibold">{propertyName}</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs text-gray-400 font-bold uppercase mb-1">Room Type</p>
-                                    <p className="font-semibold">{room.name}</p>
-                                </div>
-                                <div>
-                                    <p className="text-xs text-gray-400 font-bold uppercase mb-1">Check-In / Out</p>
-                                    <p className="font-semibold text-sm">
-                                        {new Date(successData.check_in_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} - {new Date(successData.check_out_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
 
-                        <div className="flex gap-4 justify-center">
-                            <button
-                                onClick={() => navigate('/')}
-                                className="px-6 py-3 border border-gray-300 rounded-xl font-bold text-gray-600 hover:bg-gray-50 flex items-center gap-2"
-                            >
-                                <Home size={18} /> Back to Home
-                            </button>
-                            <button
-                                onClick={() => window.print()}
-                                className="px-6 py-3 bg-keenan-dark text-white rounded-xl font-bold hover:bg-black flex items-center gap-2 shadow-lg"
-                            >
-                                <Printer size={18} /> Print Invoice
-                            </button>
-                        </div>
-                    </div>
-
-                ) : (
-                    // --- STEP 2: FORM INPUT & PAYMENT ---
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-                        {/* FORM KIRI */}
-                        <div className="lg:col-span-7 space-y-6">
-                            <div className="bg-white p-8 rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] border border-gray-100">
-                                <h2 className="text-xl font-serif font-bold text-keenan-dark mb-6 flex items-center gap-2">
-                                    <User className="text-keenan-gold" size={20} /> Guest Information
-                                </h2>
-                                <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                     <div>
-                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Full Name</label>
-                                        <input required type="text" placeholder="Sesuai KTP / Paspor"
-                                            className="w-full p-3 bg-gray-50 rounded-xl outline-none focus:ring-2 focus:ring-keenan-gold/20 transition-all font-semibold text-gray-700"
-                                            onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                                        <label className="block text-sm font-bold text-gray-500 mb-1.5 ml-1">Nomor Ponsel</label>
+                                        <div className="relative">
+                                            <div className="absolute left-3 top-3.5 flex items-center gap-1 border-r border-gray-300 pr-2">
+                                                <span className="text-sm font-bold text-gray-600">+62</span>
+                                            </div>
+                                            <input
+                                                required
+                                                type="tel"
+                                                placeholder="81234567890"
+                                                className="w-full p-3 pl-16 bg-white rounded-lg border border-gray-300 focus:border-keenan-gold focus:ring-1 focus:ring-keenan-gold outline-none transition-all text-gray-800"
+                                                onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                                            />
+                                        </div>
+                                        <p className="text-xs text-gray-400 mt-1 ml-1">E-tiket akan dikirim ke nomor ini.</p>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Email Address</label>
-                                            <input required type="email" placeholder="example@mail.com" className="w-full p-3 bg-gray-50 rounded-xl outline-none focus:ring-2 focus:ring-keenan-gold/20 transition-all"
-                                                onChange={e => setFormData({ ...formData, email: e.target.value })} />
-                                        </div>
-                                        <div>
-                                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">WhatsApp Number</label>
-                                            <input required type="tel" placeholder="0812..." className="w-full p-3 bg-gray-50 rounded-xl outline-none focus:ring-2 focus:ring-keenan-gold/20 transition-all"
-                                                onChange={e => setFormData({ ...formData, phone: e.target.value })} />
-                                        </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-500 mb-1.5 ml-1">Email</label>
+                                        <input
+                                            required
+                                            type="email"
+                                            placeholder="contoh@email.com"
+                                            className="w-full p-3 bg-white rounded-lg border border-gray-300 focus:border-keenan-gold focus:ring-1 focus:ring-keenan-gold outline-none transition-all text-gray-800"
+                                            onChange={e => setFormData({ ...formData, email: e.target.value })}
+                                        />
+                                        <p className="text-xs text-gray-400 mt-1 ml-1">Bukti pembayaran akan dikirim ke sini.</p>
                                     </div>
                                 </div>
                             </div>
+                        </div>
 
-                            <div className="bg-white p-8 rounded-2xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.07)] border border-gray-100">
-                                <h2 className="text-xl font-serif font-bold text-keenan-dark mb-6 flex items-center gap-2">
-                                    <Calendar className="text-keenan-gold" size={20} /> Stay Details
-                                </h2>
+                        {/* SECTION 2: Detail Menginap */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center gap-2">
+                                <Home className="text-keenan-gold" size={18} />
+                                <h2 className="font-bold text-gray-800 text-lg">Detail Menginap di {propertyName}</h2>
+                            </div>
 
+                            <div className="p-6">
+                                {/* Preview Kamar */}
+                                <div className="flex flex-col md:flex-row gap-4 mb-6 p-4 border border-gray-100 rounded-xl bg-gray-50/30">
+                                    <img src={room.image_url} className="w-20 h-20 md:w-24 md:h-24 rounded-lg object-cover" alt="Room" />
+                                    <div>
+                                        <h3 className="font-bold text-gray-800 mb-1">{room.name}</h3>
+                                        <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-2">
+                                            <span className="flex items-center gap-1"><User size={12} /> Max {room.capacity} Tamu</span>
+                                            <span className="flex items-center gap-1"><Wifi size={12} /> Wifi</span>
+                                            <span className="flex items-center gap-1"><Coffee size={12} /> Breakfast</span>
+                                        </div>
+                                        <div className="text-xs text-green-600 font-medium flex items-center gap-1">
+                                            <CheckCircle size={12} /> Bebas Reschedule
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Date Pickers */}
                                 <div className="grid grid-cols-2 gap-4 mb-6">
-                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Check-In</label>
-                                        <input type="date" className="w-full bg-transparent font-bold text-gray-800 outline-none"
+                                    <div className="p-3 border border-gray-300 rounded-lg hover:border-keenan-gold transition-colors cursor-pointer relative group">
+                                        <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">Check-In</label>
+                                        <input type="date" className="w-full bg-transparent font-bold text-gray-800 outline-none cursor-pointer"
                                             value={formData.checkIn} onChange={e => handleDateChange('checkIn', e.target.value)} />
                                     </div>
-                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Check-Out</label>
-                                        <input type="date" className="w-full bg-transparent font-bold text-gray-800 outline-none"
+                                    <div className="p-3 border border-gray-300 rounded-lg hover:border-keenan-gold transition-colors cursor-pointer relative group">
+                                        <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">Check-Out</label>
+                                        <input type="date" className="w-full bg-transparent font-bold text-gray-800 outline-none cursor-pointer"
                                             value={formData.checkOut} onChange={e => handleDateChange('checkOut', e.target.value)} />
                                     </div>
                                 </div>
 
-                                <div className="mb-6">
-                                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">
-                                        <span className="flex items-center gap-2"><MessageSquare size={12} /> Special Requests (Optional)</span>
-                                    </label>
+                                {/* Special Request */}
+                                <div>
+                                    <label className="text-sm font-bold text-gray-500 mb-2 block">Permintaan Khusus (Opsional)</label>
                                     <textarea
-                                        className="w-full p-4 bg-gray-50 rounded-xl outline-none focus:ring-2 focus:ring-keenan-gold/20 transition-all text-sm min-h-[100px]"
-                                        placeholder="Contoh: Saya akan check-in larut malam, tolong siapkan extra bantal..."
+                                        className="w-full p-3 bg-white rounded-lg border border-gray-300 focus:border-keenan-gold focus:ring-1 focus:ring-keenan-gold outline-none transition-all text-sm resize-none h-24"
+                                        placeholder="Misal: Check-in lebih awal, kamar bebas asap rokok..."
                                         onChange={e => setFormData({ ...formData, notes: e.target.value })}
                                     ></textarea>
                                 </div>
 
-                                <div>
-                                    {isChecking && <p className="text-xs text-gray-400 animate-pulse flex items-center gap-2"><Loader2 size={12} className="animate-spin" /> Checking availability...</p>}
+                                {/* Availability Status */}
+                                <div className="mt-4">
+                                    {isChecking && <p className="text-sm text-gray-400 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Mengecek ketersediaan...</p>}
                                     {availabilityStatus === 'unavailable' && (
-                                        <div className="bg-red-50 text-red-600 p-4 rounded-xl flex items-center gap-3 text-sm font-bold border border-red-100">
-                                            <AlertCircle size={20} />
-                                            <div>
-                                                <p>KAMAR PENUH / SOLD OUT</p>
-                                                <p className="text-xs font-normal opacity-80">Silakan ganti tanggal atau pilih kamar lain.</p>
-                                            </div>
-                                        </div>
+                                        <p className="text-sm text-red-500 flex items-center gap-2 font-bold"><AlertCircle size={14} /> Kamar penuh di tanggal ini.</p>
                                     )}
                                     {availabilityStatus === 'available' && !isChecking && (
-                                        <div className="bg-green-50 text-green-700 p-4 rounded-xl flex items-center gap-3 text-sm font-bold border border-green-200">
-                                            <CheckCircle size={20} />
-                                            <span>Kamar Tersedia. Silakan lanjutkan pembayaran.</span>
-                                        </div>
+                                        <p className="text-sm text-green-600 flex items-center gap-2 font-bold"><CheckCircle size={14} /> Kamar tersedia!</p>
                                     )}
                                 </div>
                             </div>
                         </div>
+                    </div>
 
-                        {/* RINGKASAN KANAN */}
-                        <div className="lg:col-span-5">
-                            <div className="bg-white p-6 rounded-3xl shadow-xl border border-gray-100 sticky top-10">
-                                <div className="mb-6">
-                                    <p className="text-[10px] text-keenan-gold font-bold uppercase tracking-[0.2em] mb-1">{propertyName}</p>
-                                    <h3 className="font-serif font-bold text-2xl text-keenan-dark">{room.name}</h3>
+                    {/* RIGHT COLUMN (Sticky Summary) - Lebar 4/12 */}
+                    <div className="lg:col-span-4 sticky top-24 space-y-4">
+
+                        {/* Summary Card */}
+                        <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+                            <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                                <h3 className="font-bold text-gray-800">Rincian Harga</h3>
+                                <div className="bg-white px-2 py-1 rounded border border-gray-200 text-xs font-bold text-gray-500">
+                                    {(new Date(formData.checkOut).getTime() - new Date(formData.checkIn).getTime()) / (1000 * 3600 * 24) || 0} Malam
+                                </div>
+                            </div>
+
+                            <div className="p-5 space-y-3">
+                                <div className="flex justify-between text-sm text-gray-600">
+                                    <span>Harga Kamar</span>
+                                    <span className="font-medium">{new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(room.base_price)}</span>
+                                </div>
+                                <div className="flex justify-between text-sm text-gray-600">
+                                    <span>Pajak & Biaya</span>
+                                    <span className="font-medium text-green-600">Termasuk</span>
                                 </div>
 
-                                <div className="rounded-2xl overflow-hidden h-48 mb-6 relative group">
-                                    <img src={room.image_url} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="Room" />
-                                    <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-lg text-xs font-bold shadow-sm">
-                                        Max {room.capacity} Orang
+                                <div className="border-t border-dashed border-gray-200 my-2 pt-3">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="font-bold text-gray-800 text-lg">Total Pembayaran</span>
                                     </div>
-                                </div>
-
-                                <div className="flex gap-4 mb-6 pb-6 border-b border-gray-100 overflow-x-auto">
-                                    <div className="flex flex-col items-center gap-1 text-gray-400 min-w-[50px]"><Wifi size={18} /> <span className="text-[10px] font-bold">WiFi</span></div>
-                                    <div className="flex flex-col items-center gap-1 text-gray-400 min-w-[50px]"><Wind size={18} /> <span className="text-[10px] font-bold">AC</span></div>
-                                    <div className="flex flex-col items-center gap-1 text-gray-400 min-w-[50px]"><Coffee size={18} /> <span className="text-[10px] font-bold">B'fast</span></div>
-                                    <div className="flex flex-col items-center gap-1 text-gray-400 min-w-[50px]"><Star size={18} /> <span className="text-[10px] font-bold">Luxury</span></div>
-                                </div>
-
-                                <div className="space-y-3 mb-8">
-                                    <div className="flex justify-between text-sm items-center">
-                                        <span className="text-gray-500">Harga per malam</span>
-                                        <span className="font-semibold">{new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(room.base_price)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm items-center">
-                                        <span className="text-gray-500">Durasi Menginap</span>
-                                        <span className="font-semibold">{(new Date(formData.checkOut).getTime() - new Date(formData.checkIn).getTime()) / (1000 * 3600 * 24) || 0} Malam</span>
-                                    </div>
-                                    <div className="border-t border-dashed pt-4 mt-2 flex justify-between items-end">
-                                        <span className="font-black text-gray-900 text-lg">Total</span>
-                                        <span className="font-black text-3xl text-keenan-gold">
+                                    <div className="text-right">
+                                        <span className="font-black text-2xl text-keenan-gold">
                                             {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(calculateTotal())}
                                         </span>
                                     </div>
                                 </div>
+                            </div>
 
+                            <div className="p-4 bg-gray-50">
                                 <button
                                     onClick={handlePayment}
                                     disabled={loading || availabilityStatus !== 'available'}
-                                    className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all text-sm tracking-widest uppercase ${availabilityStatus === 'available'
-                                        ? 'bg-keenan-dark text-white hover:bg-black hover:scale-[1.02]'
-                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                    className={`w-full py-4 rounded-lg font-bold text-white shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2 ${availabilityStatus === 'available'
+                                            ? 'bg-keenan-gold hover:bg-yellow-600'
+                                            : 'bg-gray-300 cursor-not-allowed'
                                         }`}
                                 >
-                                    {loading ? <Loader2 className="animate-spin" /> : "Book Now"}
+                                    {loading ? <Loader2 className="animate-spin" /> : "Lanjutkan Pembayaran"}
                                 </button>
-
-                                <p className="text-[10px] text-center text-gray-400 mt-4">
-                                    Dengan mengklik tombol di atas, Anda menyetujui Syarat & Ketentuan Keenan Living.
+                                <p className="text-[10px] text-gray-400 text-center mt-3">
+                                    Dengan lanjut, Anda setuju dengan S&K Keenan Living.
                                 </p>
                             </div>
                         </div>
+
                     </div>
-                )}
+
+                </div>
             </div>
         </div>
     );
