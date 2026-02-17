@@ -12,10 +12,13 @@ const PropertyDetails = () => {
     const navigate = useNavigate();
 
     const [property, setProperty] = useState<any>(null);
-    const [room, setRoom] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [showAllFacilities, setShowAllFacilities] = useState(false);
     const [showAllPropertyFacilities, setShowAllPropertyFacilities] = useState(false);
+
+    // --- REAL-TIME STOCK STATE ---
+    const [realTimeStock, setRealTimeStock] = useState<Record<string, number>>({});
+    const [isCheckingStock, setIsCheckingStock] = useState(false);
 
     // --- DATE & DURATION LOGIC ---
     const today = new Date().toISOString().split('T')[0];
@@ -23,14 +26,12 @@ const PropertyDetails = () => {
     const [durationType, setDurationType] = useState<'daily' | 'weekly' | 'monthly'>('daily');
     const [duration, setDuration] = useState(1);
 
+    // 1. Fetch Data Properti Awal
     useEffect(() => {
         const fetchData = async () => {
             try {
                 const res = await api.get(`/properties/${id}`);
                 setProperty(res.data);
-                if (res.data.room_types && res.data.room_types.length > 0) {
-                    setRoom(res.data.room_types[0]);
-                }
             } catch (e) {
                 console.error(e);
             } finally {
@@ -40,35 +41,76 @@ const PropertyDetails = () => {
         fetchData();
     }, [id]);
 
-    // Hitung CheckOut otomatis berdasarkan durasi
+    // 2. Hitung Tanggal Check-Out
     const getCheckOutDate = () => {
         const date = new Date(checkIn);
         if (durationType === 'daily') date.setDate(date.getDate() + duration);
-        if (durationType === 'weekly') date.setDate(date.getDate() + duration * 7);
+        if (durationType === 'weekly') date.setDate(date.getDate() + (duration * 7));
         if (durationType === 'monthly') date.setMonth(date.getMonth() + duration);
         return date.toISOString().split('T')[0];
     };
 
-    // Hitung Harga Total
-    const getTotalPrice = () => {
-        if (!room) return 0;
-        let price = room.price_daily;
-        if (durationType === 'weekly') price = room.price_weekly || room.price_daily * 7;
-        if (durationType === 'monthly') price = room.price_monthly || room.price_daily * 30;
+    // 3. LOGIC BARU: Cek Stok Real-time ke Backend
+    const checkAllRoomsAvailability = async () => {
+        if (!property?.room_types) return;
+
+        setIsCheckingStock(true);
+        const calculatedCheckOut = getCheckOutDate();
+        const newStocks: Record<string, number> = {};
+
+        // Cek availability untuk setiap kamar secara parallel
+        await Promise.all(property.room_types.map(async (r: any) => {
+            try {
+                const res = await api.get('/availability/check', {
+                    params: {
+                        room_type_id: r.id,
+                        check_in: checkIn,
+                        check_out: calculatedCheckOut
+                    }
+                });
+                newStocks[r.id] = res.data.available;
+            } catch (err) {
+                console.error("Gagal cek stok", err);
+                newStocks[r.id] = 0; // Jika error, anggap habis biar aman
+            }
+        }));
+
+        setRealTimeStock(newStocks);
+        setIsCheckingStock(false);
+    };
+
+    // 4. Trigger Cek Stok saat Tanggal/Durasi Berubah
+    useEffect(() => {
+        if (property && property.room_types && property.room_types.length > 0) {
+            checkAllRoomsAvailability();
+        }
+    }, [checkIn, duration, durationType, property]);
+
+    // 5. Hitung Harga Per Kamar (Dinamis)
+    const calculateRoomPrice = (room: any) => {
+        let price = Number(room.price_daily) || Number(room.base_price);
+
+        if (durationType === 'weekly') {
+            price = Number(room.price_weekly) || (price * 7);
+        } else if (durationType === 'monthly') {
+            price = Number(room.price_monthly) || (price * 30);
+        }
+
         return price * duration;
     };
 
     const formatRupiah = (n: number) =>
         new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n);
 
-    const handleBooking = () => {
+    // 6. Handle Booking (Kirim data kamar yang dipilih)
+    const handleBooking = (selectedRoom: any) => {
         navigate('/booking', {
             state: {
-                room,
+                room: selectedRoom,
                 propertyName: property.name,
                 preSelectedCheckIn: checkIn,
                 preSelectedCheckOut: getCheckOutDate(),
-                totalPriceOverride: getTotalPrice(),
+                totalPriceOverride: calculateRoomPrice(selectedRoom),
                 durationType,
             },
         });
@@ -96,18 +138,17 @@ const PropertyDetails = () => {
         </div>
     );
 
-    if (!property || !room) return (
+    if (!property) return (
         <div className="h-screen flex flex-col items-center justify-center bg-[#FEFBF3] text-center p-4">
             <AlertCircle size={48} className="text-red-400 mb-4" />
             <h1 className="text-2xl font-bold text-gray-800">Data tidak lengkap</h1>
-            <p className="text-gray-500 mb-6">Properti atau kamar tidak ditemukan.</p>
+            <p className="text-gray-500 mb-6">Properti tidak ditemukan.</p>
             <button onClick={() => navigate('/')} className="bg-keenan-dark text-white px-6 py-3 rounded-full font-bold text-sm hover:bg-black transition-all">
                 Back to Home
             </button>
         </div>
     );
 
-    const visibleRoomFacilities = showAllFacilities ? room.facilities : room.facilities?.slice(0, 4);
     const allPropertyFacilities = [...new Set((property.room_types || []).flatMap((r: any) => r.facilities || []))] as string[];
     const visiblePropertyFacilities = showAllPropertyFacilities ? allPropertyFacilities : allPropertyFacilities.slice(0, 9);
 
@@ -130,7 +171,6 @@ const PropertyDetails = () => {
             {/* --- PHOTO GRID --- */}
             <div className="container mx-auto max-w-7xl px-6 py-6">
                 <div className="grid grid-cols-4 grid-rows-2 gap-2 h-[420px] rounded-2xl overflow-hidden">
-                    {/* Main large photo */}
                     <div className="col-span-2 row-span-2 overflow-hidden">
                         <img
                             src={property.image_url || "https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=2070"}
@@ -138,7 +178,6 @@ const PropertyDetails = () => {
                             className="w-full h-full object-cover hover:scale-105 transition-transform duration-700"
                         />
                     </div>
-                    {/* Secondary photos */}
                     {[
                         "https://images.unsplash.com/photo-1611892440504-42a792e24d32?q=80&w=2070",
                         "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?q=80&w=2070",
@@ -153,8 +192,7 @@ const PropertyDetails = () => {
                             />
                             {idx === 3 && (
                                 <button className="absolute bottom-3 right-3 bg-black/80 text-white px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 hover:bg-black transition-colors">
-                                    <Camera size={12} />
-                                    Show all photos
+                                    <Camera size={12} /> Show all photos
                                 </button>
                             )}
                         </div>
@@ -171,7 +209,7 @@ const PropertyDetails = () => {
                 </p>
             </div>
 
-            {/* --- SEARCH BAR (gold background) --- */}
+            {/* --- SEARCH BAR --- */}
             <div className="bg-[#F5E6C8] py-10">
                 <div className="container mx-auto max-w-7xl px-6">
                     <div className="bg-white flex flex-col md:flex-row overflow-hidden max-w-4xl mx-auto shadow-sm">
@@ -196,11 +234,10 @@ const PropertyDetails = () => {
                                     <button
                                         key={type}
                                         onClick={() => { setDurationType(type); setDuration(1); }}
-                                        className={`flex-1 py-1 text-[10px] font-bold uppercase rounded transition-all border ${
-                                            durationType === type
+                                        className={`flex-1 py-1 text-[10px] font-bold uppercase rounded transition-all border ${durationType === type
                                                 ? 'bg-keenan-gold text-white border-keenan-gold'
                                                 : 'text-gray-400 border-gray-200 hover:border-gray-300'
-                                        }`}
+                                            }`}
                                     >
                                         {type === 'daily' ? 'Harian' : type === 'weekly' ? 'Mingguan' : 'Bulanan'}
                                     </button>
@@ -234,109 +271,130 @@ const PropertyDetails = () => {
                             </p>
                         </div>
 
-                        {/* Find Rooms */}
-                        <button
-                            onClick={handleBooking}
-                            className="bg-keenan-gold hover:bg-keenan-dark text-white px-8 py-4 font-bold uppercase tracking-widest text-xs transition-colors min-w-[130px]"
-                        >
-                            FIND ROOMS
-                        </button>
+                        {/* Button Visual */}
+                        <div className="bg-keenan-gold px-8 py-4 flex items-center justify-center text-white font-bold uppercase text-xs tracking-widest">
+                            UPDATING...
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* --- ROOM & RATES --- */}
+            {/* --- ROOM & RATES (LOGIC REAL-TIME TERAPKAN DISINI) --- */}
             <div className="bg-[#FEFBF3] py-12">
                 <div className="container mx-auto max-w-7xl px-6">
                     <h2 className="text-2xl font-serif font-bold text-gray-900 mb-1">Room &amp; Rates</h2>
-                    <p className="text-gray-400 text-sm mb-8">Your trip summary</p>
+                    <p className="text-gray-400 text-sm mb-8">
+                        {isCheckingStock ? "Sedang mengecek ketersediaan..." : "Pilih kamar yang tersedia"}
+                    </p>
 
-                    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col md:flex-row shadow-sm hover:shadow-md transition-shadow">
+                    <div className="space-y-6">
+                        {property.room_types.map((room: any) => {
+                            // AMBIL STOK DARI STATE REAL-TIME
+                            const currentStock = isCheckingStock ? 0 : (realTimeStock[room.id] ?? room.total_stock);
+                            const isSoldOut = !isCheckingStock && currentStock === 0;
 
-                        {/* Room Image */}
-                        <div className="md:w-64 h-56 md:h-auto relative shrink-0 overflow-hidden group">
-                            <img
-                                src={room.image_url || "https://images.unsplash.com/photo-1611892440504-42a792e24d32?q=80&w=2070"}
-                                alt={room.name}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                            />
-                            <button className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/75 text-white px-3 py-1.5 rounded text-xs font-semibold whitespace-nowrap hover:bg-black transition-colors">
-                                Show all photos
-                            </button>
-                        </div>
+                            const visibleFacilities = showAllFacilities ? room.facilities : room.facilities?.slice(0, 4);
 
-                        {/* Room Details */}
-                        <div className="flex-1 p-6 flex flex-col justify-between">
-                            <div>
-                                {/* Name & Stock Badge */}
-                                <div className="flex items-start justify-between mb-1">
-                                    <h3 className="text-xl font-serif font-bold text-gray-900">{room.name}</h3>
-                                    {room.total_stock > 0 ? (
-                                        <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-1 rounded font-bold uppercase tracking-wide whitespace-nowrap ml-3">
-                                            🔥 {room.total_stock} Unit Tersisa
-                                        </span>
-                                    ) : (
-                                        <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded font-bold uppercase tracking-wide ml-3">
-                                            Fully Booked
-                                        </span>
-                                    )}
-                                </div>
+                            return (
+                                <div key={room.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col md:flex-row shadow-sm hover:shadow-md transition-shadow relative">
 
-                                <p className="text-gray-400 text-xs mb-4 flex items-center gap-1.5">
-                                    <Users size={12} />
-                                    {room.capacity} Guest{room.capacity > 1 ? 's' : ''}
-                                </p>
-
-                                {/* Facilities */}
-                                {room.facilities && room.facilities.length > 0 && (
-                                    <div>
-                                        <p className="text-xs font-semibold text-gray-500 mb-3">Facilities:</p>
-                                        <div className="flex flex-wrap gap-x-6 gap-y-2 mb-2">
-                                            {visibleRoomFacilities.map((fac: string, i: number) => (
-                                                <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
-                                                    {getFacilityIcon(fac)}
-                                                    <span className="line-clamp-1 max-w-[130px]">{fac}</span>
-                                                </div>
-                                            ))}
+                                    {/* Overlay Loading */}
+                                    {isCheckingStock && (
+                                        <div className="absolute inset-0 bg-white/70 z-10 flex items-center justify-center backdrop-blur-[1px]">
+                                            <Loader2 className="animate-spin text-keenan-gold" />
                                         </div>
-                                        {room.facilities.length > 4 && (
-                                            <button
-                                                onClick={() => setShowAllFacilities(!showAllFacilities)}
-                                                className="text-xs text-keenan-gold underline font-medium flex items-center gap-1 mt-1 hover:text-keenan-dark transition-colors"
-                                            >
-                                                {showAllFacilities
-                                                    ? <><ChevronUp size={12} /> Hide facilities</>
-                                                    : <><ChevronDown size={12} /> Show all facilities</>
-                                                }
-                                            </button>
-                                        )}
+                                    )}
+
+                                    {/* Room Image */}
+                                    <div className="md:w-64 h-56 md:h-auto relative shrink-0 overflow-hidden group">
+                                        <img
+                                            src={room.image_url || "https://images.unsplash.com/photo-1611892440504-42a792e24d32?q=80&w=2070"}
+                                            alt={room.name}
+                                            className={`w-full h-full object-cover transition-transform duration-700 ${isSoldOut ? 'grayscale' : 'group-hover:scale-105'}`}
+                                        />
+                                        <button className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/75 text-white px-3 py-1.5 rounded text-xs font-semibold whitespace-nowrap hover:bg-black transition-colors">
+                                            Show photos
+                                        </button>
                                     </div>
-                                )}
-                            </div>
-                        </div>
 
-                        {/* Price & Book */}
-                        <div className="shrink-0 p-6 flex flex-col items-end justify-between border-t md:border-t-0 md:border-l border-gray-100 md:min-w-[200px]">
-                            <div className="text-right">
-                                <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">
-                                    {duration} {durationLabel}
-                                </p>
-                                <p className="text-2xl font-bold font-serif text-gray-900">
-                                    {formatRupiah(getTotalPrice())}
-                                </p>
-                                <p className="text-xs text-gray-400 mt-0.5">
-                                    {formatRupiah(room.price_daily)} / malam
-                                </p>
-                            </div>
+                                    {/* Room Details */}
+                                    <div className="flex-1 p-6 flex flex-col justify-between">
+                                        <div>
+                                            <div className="flex items-start justify-between mb-1">
+                                                <h3 className="text-xl font-serif font-bold text-gray-900">{room.name}</h3>
 
-                            <button
-                                onClick={handleBooking}
-                                disabled={room.total_stock === 0}
-                                className="mt-4 bg-keenan-gold hover:bg-keenan-dark disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-6 py-3 font-bold uppercase text-xs tracking-widest transition-colors text-center min-w-[120px]"
-                            >
-                                BOOK<br />NOW
-                            </button>
-                        </div>
+                                                {/* BADGE STOK DINAMIS */}
+                                                {!isCheckingStock && (
+                                                    isSoldOut ? (
+                                                        <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded font-bold uppercase tracking-wide ml-3">
+                                                            ❌ Sold Out
+                                                        </span>
+                                                    ) : (
+                                                        <span className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wide ml-3 whitespace-nowrap ${currentStock <= 3 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}`}>
+                                                            {currentStock <= 3 ? `🔥 Sisa ${currentStock} Unit` : `✅ Tersedia`}
+                                                        </span>
+                                                    )
+                                                )}
+                                            </div>
+
+                                            <p className="text-gray-400 text-xs mb-4 flex items-center gap-1.5">
+                                                <Users size={12} /> {room.capacity} Guest{room.capacity > 1 ? 's' : ''}
+                                            </p>
+
+                                            {/* Facilities */}
+                                            {room.facilities && room.facilities.length > 0 && (
+                                                <div>
+                                                    <p className="text-xs font-semibold text-gray-500 mb-3">Facilities:</p>
+                                                    <div className="flex flex-wrap gap-x-6 gap-y-2 mb-2">
+                                                        {visibleFacilities.map((fac: string, i: number) => (
+                                                            <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
+                                                                {getFacilityIcon(fac)}
+                                                                <span className="line-clamp-1 max-w-[130px]">{fac}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                    {room.facilities.length > 4 && (
+                                                        <button
+                                                            onClick={() => setShowAllFacilities(!showAllFacilities)}
+                                                            className="text-xs text-keenan-gold underline font-medium flex items-center gap-1 mt-1 hover:text-keenan-dark transition-colors"
+                                                        >
+                                                            {showAllFacilities ? <><ChevronUp size={12} /> Hide facilities</> : <><ChevronDown size={12} /> Show all facilities</>}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Price & Book */}
+                                    <div className="shrink-0 p-6 flex flex-col items-end justify-between border-t md:border-t-0 md:border-l border-gray-100 md:min-w-[200px]">
+                                        <div className="text-right">
+                                            <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">
+                                                Total {duration} {durationLabel}
+                                            </p>
+                                            <p className="text-2xl font-bold font-serif text-gray-900">
+                                                {formatRupiah(calculateRoomPrice(room))}
+                                            </p>
+                                            <p className="text-xs text-gray-400 mt-0.5">
+                                                {formatRupiah(Number(room.price_daily) || Number(room.base_price))} / malam
+                                            </p>
+                                        </div>
+
+                                        <button
+                                            onClick={() => handleBooking(room)}
+                                            disabled={isSoldOut || isCheckingStock}
+                                            className={`mt-4 w-full px-6 py-3 font-bold uppercase text-xs tracking-widest transition-colors text-center min-w-[120px] rounded
+                                                ${isSoldOut || isCheckingStock
+                                                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                                    : 'bg-keenan-gold hover:bg-keenan-dark text-white shadow-md'
+                                                }`}
+                                        >
+                                            {isCheckingStock ? 'Checking...' : (isSoldOut ? 'Full Booked' : 'BOOK NOW')}
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             </div>
@@ -346,7 +404,7 @@ const PropertyDetails = () => {
                 <div className="container mx-auto max-w-7xl px-6">
                     <h2 className="text-2xl font-serif font-bold text-gray-900 mb-6">About {property.name}</h2>
                     <p className="text-gray-600 leading-relaxed text-sm text-justify">
-                        {property.description || "At Keenan Living, we believe that a great stay begins with thoughtful details, personalized service, and a space that truly feels like home. As a hospitality brand built around comfort, convenience, and care, we are committed to offering more than just a place to stay — we create experiences that leave a lasting impression."}
+                        {property.description || "Rasakan kenyamanan menginap dengan fasilitas lengkap dan pelayanan terbaik."}
                     </p>
                 </div>
             </div>
@@ -379,7 +437,7 @@ const PropertyDetails = () => {
                 </div>
             )}
 
-            {/* --- LOCATION / MAP --- */}
+            {/* --- LOCATION --- */}
             <div className="bg-white py-12 border-t border-gray-100">
                 <div className="container mx-auto max-w-7xl px-6">
                     <h2 className="text-2xl font-serif font-bold text-gray-900 mb-4">Location</h2>

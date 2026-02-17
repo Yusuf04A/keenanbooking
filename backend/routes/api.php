@@ -18,6 +18,8 @@ use App\Http\Controllers\Api\AdminController; // Pastikan ini di-import
 // =================================================================
 
 // Data Hotel & Kamar
+Route::get('/availability/check', [PublicController::class, 'checkAvailability']);
+
 Route::get('/properties', [PublicController::class, 'getProperties']);
 Route::get('/properties/{id}', [PublicController::class, 'getPropertyDetail']);
 

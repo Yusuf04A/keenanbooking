@@ -130,9 +130,37 @@ export default function AdminDashboard() {
         }
     };
 
+    const getPlatformColor = (name: string) => {
+        const colors = [
+            'bg-red-100 text-red-700 border-red-200',
+            'bg-orange-100 text-orange-700 border-orange-200',
+            'bg-amber-100 text-amber-700 border-amber-200',
+            'bg-lime-100 text-lime-700 border-lime-200',
+            'bg-emerald-100 text-emerald-700 border-emerald-200',
+            'bg-teal-100 text-teal-700 border-teal-200',
+            'bg-cyan-100 text-cyan-700 border-cyan-200',
+            'bg-sky-100 text-sky-700 border-sky-200',
+            'bg-indigo-100 text-indigo-700 border-indigo-200',
+            'bg-violet-100 text-violet-700 border-violet-200',
+            'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200',
+            'bg-pink-100 text-pink-700 border-pink-200',
+            'bg-rose-100 text-rose-700 border-rose-200',
+        ];
+
+        // Buat hash sederhana dari string nama
+        let hash = 0;
+        for (let i = 0; i < name.length; i++) {
+            hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        }
+
+        // Pilih warna berdasarkan index hash
+        return colors[Math.abs(hash) % colors.length];
+    };
+
     const getSourceBadge = (source: string = 'website') => {
         const s = source?.toLowerCase() || 'website';
 
+        // 1. Platform Besar (Hardcoded Warna Brand Asli)
         if (s.includes('agoda')) return <span className="text-[10px] font-bold px-2 py-1 bg-purple-100 text-purple-700 rounded border border-purple-200 flex items-center gap-1 w-fit"><Smartphone size={10} /> AGODA</span>;
         if (s.includes('traveloka')) return <span className="text-[10px] font-bold px-2 py-1 bg-blue-100 text-blue-700 rounded border border-blue-200 flex items-center gap-1 w-fit"><Smartphone size={10} /> TRAVELOKA</span>;
         if (s.includes('tiket')) return <span className="text-[10px] font-bold px-2 py-1 bg-yellow-100 text-yellow-700 rounded border border-yellow-200 flex items-center gap-1 w-fit"><Smartphone size={10} /> TIKET.COM</span>;
@@ -140,9 +168,11 @@ export default function AdminDashboard() {
         if (s === 'walk_in' || s === 'walk-in' || s.includes('walk')) return <span className="text-[10px] font-bold px-2 py-1 bg-gray-100 text-gray-700 rounded border border-gray-200 flex items-center gap-1 w-fit"><User size={10} /> WALK-IN</span>;
         if (s === 'website') return <span className="text-[10px] font-bold px-2 py-1 bg-keenan-gold/10 text-keenan-gold rounded border border-keenan-gold/20 flex items-center gap-1 w-fit"><Globe size={10} /> WEBSITE</span>;
 
-        // FALLBACK DINAMIS (Untuk Trip.com dll)
+        // 2. Platform Baru/Custom (Warna Warni Otomatis)
+        const dynamicColorClass = getPlatformColor(s);
+
         return (
-            <span className="text-[10px] font-bold px-2 py-1 bg-teal-50 text-teal-700 rounded border border-teal-200 flex items-center gap-1 w-fit uppercase">
+            <span className={`text-[10px] font-bold px-2 py-1 rounded border flex items-center gap-1 w-fit uppercase ${dynamicColorClass}`}>
                 <Globe size={10} /> {s.replace(/[-_]/g, ' ')}
             </span>
         );
