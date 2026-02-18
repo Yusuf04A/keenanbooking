@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api'; // <--- GANTI IMPORT SUPABASE KE API LARAVEL
 import { Loader2, Printer } from 'lucide-react';
 
 export default function InvoicePage() {
@@ -13,31 +13,33 @@ export default function InvoicePage() {
     }, []);
 
     const fetchBookingDetail = async () => {
-        const { data, error } = await supabase
-            .from('bookings')
-            .select(`*, room_types(name), properties(name, address)`)
-            .eq('id', id)
-            .single();
+        try {
+            const response = await api.get(`/bookings/${id}`);
 
-        if (error) {
-            alert("Data booking tidak ditemukan");
-        } else {
-            setBooking(data);
-            // Otomatis print setelah data muncul (kasih delay dikit biar rendering selesai)
+            setBooking(response.data);
+
+            // Otomatis print setelah data muncul
             setTimeout(() => {
                 window.print();
             }, 1000);
+
+        } catch (error) {
+            console.error("Error fetching invoice:", error);
+            alert("Data booking tidak ditemukan atau Anda tidak memiliki akses.");
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin" /> Loading Invoice...</div>;
-    if (!booking) return <div>Data tidak ditemukan.</div>;
+    if (!booking) return <div className="h-screen flex items-center justify-center">Data tidak ditemukan.</div>;
 
     // Hitung durasi menginap
     const checkIn = new Date(booking.check_in_date);
     const checkOut = new Date(booking.check_out_date);
-    const nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 3600 * 24));
+    // Hitung malam, minimal 1 malam jika check-in/out di hari sama (untuk hourly)
+    const diffTime = Math.abs(checkOut.getTime() - checkIn.getTime());
+    const nights = Math.max(1, Math.ceil(diffTime / (1000 * 3600 * 24)));
 
     return (
         <div className="bg-gray-100 min-h-screen p-8 print:bg-white print:p-0">
@@ -60,7 +62,8 @@ export default function InvoicePage() {
                     <div className="text-right">
                         <h2 className="text-xl font-bold text-keenan-gold uppercase">KEENAN LIVING</h2>
                         <p className="text-sm text-gray-500 max-w-[200px] leading-tight mt-1">
-                            {booking.properties?.address || 'Yogyakarta, Indonesia'}
+                            {/* Relasi property di Laravel biasanya singular 'property' bukan 'properties' */}
+                            {booking.property?.address || 'Yogyakarta, Indonesia'}
                         </p>
                     </div>
                 </div>
@@ -94,7 +97,8 @@ export default function InvoicePage() {
                     <tbody className="text-gray-700">
                         <tr className="border-b border-gray-50">
                             <td className="py-4">
-                                <p className="font-bold">{booking.room_types?.name}</p>
+                                {/* Relasi room_type di Laravel biasanya 'room_type' atau 'roomType' */}
+                                <p className="font-bold">{booking.room_type?.name || booking.room_types?.name}</p>
                                 <p className="text-xs text-gray-500">
                                     Check-In: {new Date(booking.check_in_date).toLocaleDateString('id-ID')} <br />
                                     Check-Out: {new Date(booking.check_out_date).toLocaleDateString('id-ID')}
@@ -120,7 +124,7 @@ export default function InvoicePage() {
                             <span className="font-bold">Rp 0</span>
                         </div>
                         <div className="flex justify-between py-4 text-xl">
-                            <span className="font-black text-gray-900">TOTAL PAIDTH</span>
+                            <span className="font-black text-gray-900">TOTAL PAID</span>
                             <span className="font-black text-keenan-gold">
                                 {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(booking.total_price)}
                             </span>
@@ -131,7 +135,7 @@ export default function InvoicePage() {
                 {/* FOOTER */}
                 <div className="text-center border-t border-gray-100 pt-8">
                     <p className="text-2xl font-serif font-bold italic text-gray-300 mb-4">Thank You!</p>
-                    <p className="text-[10px] text-gray-400 uppercase tracking-widest">
+                    <p className="text-][10px] text-gray-400 uppercase tracking-widest">
                         Keenan Living Management System<br />
                         Generated on {new Date().toLocaleString()}
                     </p>
