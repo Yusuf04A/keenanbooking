@@ -169,12 +169,18 @@ class BookingController extends Controller
         ]);
 
         $booking = Booking::findOrFail($id);
-
-        // ❌ HAPUS SEMUA LOGIKA DECREMENT/INCREMENT DISINI
-        // Perubahan status (Paid/Cancel) hanya mempengaruhi apakah booking itu dihitung
-        // sebagai "active" atau tidak di createTransaction nanti.
-
         $booking->update(['status' => $request->status]);
+
+        // --- TAMBAHAN: KIRIM EMAIL JIKA STATUS DIUBAH JADI PAID ---
+        if ($request->status === 'paid') {
+            try {
+                // Pastikan class Mail diimport di atas: use Illuminate\Support\Facades\Mail;
+                Mail::to($booking->customer_email)->send(new BookingConfirmation($booking));
+            } catch (\Exception $e) {
+                Log::error("Gagal kirim email manual: " . $e->getMessage());
+            }
+        }
+        // ----------------------------------------------------------
 
         return response()->json(['message' => 'Status updated', 'booking' => $booking]);
     }

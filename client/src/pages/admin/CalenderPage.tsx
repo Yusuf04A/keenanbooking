@@ -3,6 +3,7 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import { api } from '../../lib/api'; // <--- API LARAVEL
+import { sendWhatsAppInvoice } from '../../lib/fonnte'; // <--- IMPORT PENTING UNTUK WA
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Calendar as CalendarIcon, User, Plus, X, Phone, Mail, MessageSquare, AlertCircle, Globe } from 'lucide-react';
 
@@ -17,7 +18,7 @@ export default function CalendarPage() {
     const [availabilityMsg, setAvailabilityMsg] = useState('');
 
     const [rooms, setRooms] = useState<any[]>([]);
-    const [platforms, setPlatforms] = useState<any[]>([]); // <--- STATE BARU UNTUK PLATFORM
+    const [platforms, setPlatforms] = useState<any[]>([]);
 
     // Booking Form State
     const [newBooking, setNewBooking] = useState({
@@ -29,14 +30,13 @@ export default function CalendarPage() {
         check_out_date: '',
         total_price: 0,
         notes: '',
-        booking_source: '' // <--- Default kosong, nanti diisi user
+        booking_source: ''
     });
 
     const adminScope = localStorage.getItem('keenan_admin_scope') || 'all';
 
     useEffect(() => {
         const init = async () => {
-            // Fetch bookings, rooms, DAN platforms secara parallel
             await Promise.all([fetchBookingsToEvents(), fetchRooms(), fetchPlatforms()]);
             setLoading(false);
         };
@@ -94,13 +94,11 @@ export default function CalendarPage() {
         }
     };
 
-    // --- FETCH PLATFORMS DARI DATABASE ---
     const fetchPlatforms = async () => {
         try {
             const response = await api.get('/admin/platforms');
             setPlatforms(response.data || []);
 
-            // Set default booking source ke platform pertama jika ada
             if (response.data && response.data.length > 0) {
                 setNewBooking(prev => ({ ...prev, booking_source: response.data[0].slug }));
             } else {
@@ -108,7 +106,6 @@ export default function CalendarPage() {
             }
         } catch (err) {
             console.error("Error fetch platforms:", err);
-            // Fallback manual jika API error
             setPlatforms([
                 { id: 1, name: 'Walk-in', slug: 'walk_in' },
                 { id: 2, name: 'Agoda', slug: 'agoda' },
@@ -181,7 +178,7 @@ export default function CalendarPage() {
         if (!selectedRoom) return alert("Pilih tipe kamar!");
 
         try {
-            // 1. Create Booking
+            // 1. Create Booking (Pending)
             const res = await api.post('/midtrans/create-transaction', {
                 property_id: selectedRoom.property_id,
                 room_type_id: newBooking.room_type_id,
@@ -192,20 +189,34 @@ export default function CalendarPage() {
                 check_out_date: newBooking.check_out_date,
                 total_price: newBooking.total_price,
                 customer_notes: newBooking.notes,
-                booking_source: newBooking.booking_source, // Kirim source yang dipilih
+                booking_source: newBooking.booking_source,
             });
 
             const bookingData = res.data.booking;
 
-            // 2. Langsung Update jadi PAID
+            // 2. Langsung Update jadi PAID (Ini akan mentrigger EMAIL di Backend)
             await api.put(`/admin/bookings/${bookingData.id}/status`, {
                 status: 'paid'
             });
 
-            alert("✅ Manual Booking Berhasil Disimpan!");
+            // 3. KIRIM WHATSAPP (Logic Frontend)
+            // Pastikan format nomor HP benar
+            await sendWhatsAppInvoice(
+                newBooking.customer_phone,
+                newBooking.customer_name,
+                bookingData.booking_code,
+                selectedRoom.property?.name || 'Keenan Living', // Ambil nama property
+                selectedRoom.name,
+                newBooking.check_in_date,
+                newBooking.check_out_date,
+                newBooking.total_price,
+                "" // PDF kosong karena manual booking gak ada PDF Midtrans
+            );
+
+            alert("✅ Manual Booking Berhasil & Notifikasi Terkirim!");
             setIsModalOpen(false);
 
-            // Reset Form (Default booking source ke item pertama)
+            // Reset Form
             setNewBooking({
                 customer_name: '', customer_email: '', customer_phone: '',
                 room_type_id: '', check_in_date: '', check_out_date: '',
@@ -285,7 +296,6 @@ export default function CalendarPage() {
                                     <Globe size={12} /> Sumber Booking (Platform)
                                 </label>
 
-                                {/* DYNAMIC PLATFORM BUTTONS */}
                                 <div className="flex flex-wrap gap-2">
                                     {platforms.length > 0 ? (
                                         platforms.map((plat) => (
@@ -294,8 +304,8 @@ export default function CalendarPage() {
                                                 type="button"
                                                 onClick={() => setNewBooking({ ...newBooking, booking_source: plat.slug })}
                                                 className={`px-4 py-2 rounded-lg text-xs font-bold uppercase border transition-all ${newBooking.booking_source === plat.slug
-                                                    ? 'bg-keenan-gold text-white border-keenan-gold shadow-md'
-                                                    : 'bg-white text-gray-500 border-gray-200 hover:border-keenan-gold hover:text-keenan-dark'
+                                                        ? 'bg-keenan-gold text-white border-keenan-gold shadow-md'
+                                                        : 'bg-white text-gray-500 border-gray-200 hover:border-keenan-gold hover:text-keenan-dark'
                                                     }`}
                                             >
                                                 {plat.name}
