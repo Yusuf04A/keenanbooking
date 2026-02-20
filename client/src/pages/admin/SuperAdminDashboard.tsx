@@ -89,7 +89,7 @@ export default function SuperAdminDashboard() {
     const [properties, setProperties] = useState<any[]>([]);
     const [rooms, setRooms] = useState<any[]>([]);
     const [admins, setAdmins] = useState<any[]>([]);
-    const [platforms, setPlatforms] = useState<any[]>([]); // <--- NEW STATE FOR PLATFORMS
+    const [platforms, setPlatforms] = useState<any[]>([]);
 
     const [selectedPropertyFilter, setSelectedPropertyFilter] = useState('all');
     const [analytics, setAnalytics] = useState({
@@ -110,7 +110,6 @@ export default function SuperAdminDashboard() {
     const facilityOptions = ["Wifi", "AC", "Breakfast", "TV", "Netflix", "Hot Water", "Parking", "Kitchen"];
     const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
 
-    // 1. Cek Role & Fetch Data Awal
     useEffect(() => {
         const checkUserRole = () => {
             const role = localStorage.getItem('keenan_admin_role');
@@ -123,7 +122,6 @@ export default function SuperAdminDashboard() {
         checkUserRole();
     }, [navigate]);
 
-    // 2. Kalkulasi Analytics di Frontend (Setiap data booking berubah)
     useEffect(() => {
         if (!loading) calculateAnalytics();
     }, [selectedPropertyFilter, rawBookings]);
@@ -131,25 +129,24 @@ export default function SuperAdminDashboard() {
     const fetchAllData = async () => {
         setLoading(true);
         try {
-            // Panggil API Laravel secara parallel
             const [propsRes, roomsRes, staffRes, bookingsRes, platformsRes] = await Promise.all([
-                api.get('/properties'),         // Ambil Property
-                api.get('/admin/rooms'),        // Ambil Semua Kamar
-                api.get('/admin/staff'),        // Ambil Staff
-                api.get('/admin/bookings'),     // Ambil Booking
-                api.get('/admin/platforms')     // Ambil Platforms (NEW)
+                api.get('/properties'),
+                api.get('/admin/rooms'),
+                api.get('/admin/staff'),
+                api.get('/admin/bookings'),
+                api.get('/admin/platforms')
             ]);
 
             setProperties(propsRes.data || []);
             setRooms(roomsRes.data || []);
             setAdmins(staffRes.data || []);
             setRawBookings(bookingsRes.data || []);
-            setPlatforms(platformsRes.data || []); // Set Data Platforms
+            setPlatforms(platformsRes.data || []);
 
         } catch (error: any) {
             console.error("Fetch Error:", error);
             if (error.response?.status === 401) {
-                navigate('/admin/login'); // Kalau token expired, tendang ke login
+                navigate('/admin/login');
             }
         } finally {
             setLoading(false);
@@ -202,37 +199,75 @@ export default function SuperAdminDashboard() {
     const formatRupiah = (price: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(price);
     const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 
-    // --- CRUD HANDLERS (LARAVEL API) ---
+    // --- FUNGSI HANDLE FILE UPLOAD LOKAL ---
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            setFormData({
+                ...formData,
+                image_file: file, // Simpan file aslinya
+                preview_url: URL.createObjectURL(file) // Buat link preview sementaranya
+            });
+        }
+    };
+
+    // --- CRUD HANDLERS ---
     const handleSave = async () => {
         setUploading(true);
         try {
-            // PROPERTY
+            // PROPERTY (MENGGUNAKAN FORMDATA KARENA ADA FILE)
             if (modalType === 'property') {
-                const payload = {
-                    name: formData.name,
-                    address: formData.address,
-                    description: formData.description,
-                    image_url: formData.image_url || 'https://images.unsplash.com/photo-1566073771259-6a8506099945'
-                };
-                if (editingId) await api.put(`/admin/properties/${editingId}`, payload);
-                else await api.post('/admin/properties', payload);
+                const submitData = new FormData();
+                submitData.append('name', formData.name || '');
+                submitData.append('address', formData.address || '');
+                submitData.append('description', formData.description || '');
+
+                if (formData.image_file) {
+                    submitData.append('image', formData.image_file); // 'image' adalah nama field yg dikirim ke laravel
+                }
+
+                if (editingId) {
+                    submitData.append('_method', 'PUT'); // Trik Laravel untuk update dengan file
+                    await api.post(`/admin/properties/${editingId}`, submitData, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                    });
+                } else {
+                    await api.post('/admin/properties', submitData, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                    });
+                }
             }
 
-            // ROOM
+            // ROOM (MENGGUNAKAN FORMDATA KARENA ADA FILE)
             if (modalType === 'room') {
-                const payload = {
-                    property_id: formData.property_id,
-                    name: formData.name,
-                    price_daily: formData.price_daily,     // <--- Update Field Baru
-                    price_weekly: formData.price_weekly,   // <--- Update Field Baru
-                    price_monthly: formData.price_monthly, // <--- Update Field Baru
-                    capacity: formData.capacity,
-                    total_stock: formData.total_stock,
-                    image_url: formData.image_url || 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304',
-                    facilities: selectedFacilities
-                };
-                if (editingId) await api.put(`/admin/rooms/${editingId}`, payload);
-                else await api.post('/admin/rooms', payload);
+                const submitData = new FormData();
+                submitData.append('property_id', formData.property_id || '');
+                submitData.append('name', formData.name || '');
+                submitData.append('price_daily', formData.price_daily || '');
+                submitData.append('price_weekly', formData.price_weekly || '');
+                submitData.append('price_monthly', formData.price_monthly || '');
+                submitData.append('capacity', formData.capacity || '');
+                submitData.append('total_stock', formData.total_stock || '');
+
+                // Array facilities harus di-loop untuk masuk ke FormData
+                selectedFacilities.forEach((fac, index) => {
+                    submitData.append(`facilities[${index}]`, fac);
+                });
+
+                if (formData.image_file) {
+                    submitData.append('image', formData.image_file);
+                }
+
+                if (editingId) {
+                    submitData.append('_method', 'PUT');
+                    await api.post(`/admin/rooms/${editingId}`, submitData, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                    });
+                } else {
+                    await api.post('/admin/rooms', submitData, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                    });
+                }
             }
 
             // STAFF
@@ -242,7 +277,7 @@ export default function SuperAdminDashboard() {
                 else await api.post('/admin/staff', payload);
             }
 
-            // PLATFORM (NEW)
+            // PLATFORM
             if (modalType === 'platform') {
                 await api.post('/admin/platforms', { name: formData.name });
             }
@@ -272,8 +307,10 @@ export default function SuperAdminDashboard() {
     }
 
     const openModal = (type: any, data: any = null) => {
-        setModalType(type); setEditingId(data?.id);
-        setFormData(data || {});
+        setModalType(type);
+        setEditingId(data?.id);
+        // Reset preview file jika membuka modal
+        setFormData({ ...data, image_file: null, preview_url: null } || {});
         setSelectedFacilities(data?.facilities || []);
         setIsModalOpen(true);
     }
@@ -308,7 +345,6 @@ export default function SuperAdminDashboard() {
                     <button onClick={() => setActiveTab('properties')} className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${activeTab === 'properties' ? 'bg-white/10 text-white font-bold' : 'text-gray-400 hover:bg-white/5'}`}><Hotel size={18} /> Properties</button>
                     <button onClick={() => setActiveTab('rooms')} className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${activeTab === 'rooms' ? 'bg-white/10 text-white font-bold' : 'text-gray-400 hover:bg-white/5'}`}><BedDouble size={18} /> Rooms</button>
                     <button onClick={() => setActiveTab('staff')} className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${activeTab === 'staff' ? 'bg-white/10 text-white font-bold' : 'text-gray-400 hover:bg-white/5'}`}><Users size={18} /> Staff</button>
-                    {/* NEW MENU: PLATFORMS */}
                     <button onClick={() => setActiveTab('platforms')} className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${activeTab === 'platforms' ? 'bg-white/10 text-white font-bold' : 'text-gray-400 hover:bg-white/5'}`}><Layers size={18} /> Platforms</button>
                 </nav>
                 <button onClick={handleLogout} className="absolute bottom-8 left-6 right-6 flex items-center justify-center gap-2 p-3 rounded-lg border border-red-900/50 text-red-400 hover:bg-red-900/20"><LogOut size={18} /> Logout</button>
@@ -392,7 +428,7 @@ export default function SuperAdminDashboard() {
                 {/* --- TAB 3: MANAGE PROPERTIES --- */}
                 {activeTab === 'properties' && (
                     <div className="animate-in fade-in slide-in-from-bottom-4">
-                        <div className="flex justify-between items-center mb-8"><h2 className="text-2xl font-serif font-bold text-keenan-dark">Manage Properties</h2><button onClick={() => openModal('property')} className="bg-keenan-dark text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-black"><Plus size={18} /> Add New Hotel</button></div>
+                        <div className="flex justify-between items-center mb-8"><h2 className="text-2xl font-serif font-bold text-keenan-dark">Manage Properties</h2><button onClick={() => openModal('property')} className="bg-keenan-dark text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-black"><Plus size={18} /> Add New Properties</button></div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {properties.map(prop => (
                                 <div key={prop.id} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 group flex flex-col h-full">
@@ -458,7 +494,7 @@ export default function SuperAdminDashboard() {
                     </div>
                 )}
 
-                {/* --- TAB 6: MANAGE PLATFORMS (NEW) --- */}
+                {/* --- TAB 6: MANAGE PLATFORMS --- */}
                 {activeTab === 'platforms' && (
                     <div className="animate-in fade-in slide-in-from-bottom-4">
                         <div className="flex justify-between items-center mb-8">
@@ -584,11 +620,22 @@ export default function SuperAdminDashboard() {
                                         <input placeholder="Hotel Name" value={formData.name || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, name: e.target.value })} />
                                         <input placeholder="Address" value={formData.address || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, address: e.target.value })} />
 
-                                        {/* IMAGE URL INPUT */}
-                                        <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
-                                            <label className="text-xs font-bold text-gray-400 uppercase">Image URL (Link Gambar)</label>
-                                            <input placeholder="https://..." value={formData.image_url || ''} className="w-full p-2 mt-1 bg-white border rounded outline-none" onChange={e => setFormData({ ...formData, image_url: e.target.value })} />
-                                            <p className="text-[10px] text-gray-400 mt-1">*Masukkan link gambar dari Unsplash/Google karena server belum support upload file.</p>
+                                        {/* PERUBAHAN: FILE UPLOAD LOKAL UNTUK PROPERTY */}
+                                        <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                                            <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2 mb-3">
+                                                <UploadCloud size={16} className="text-keenan-gold" /> Upload Property Image
+                                            </label>
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={handleFileChange}
+                                                className="w-full text-sm text-gray-500 file:mr-4 file:py-2.5 file:px-5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-keenan-gold/10 file:text-keenan-dark hover:file:bg-keenan-gold/20 cursor-pointer"
+                                            />
+                                            {(formData.preview_url || formData.image_url) && (
+                                                <div className="mt-4 relative w-full h-40 rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+                                                    <img src={formData.preview_url || formData.image_url} alt="Preview" className="w-full h-full object-cover" />
+                                                </div>
+                                            )}
                                         </div>
 
                                         <textarea placeholder="Description" value={formData.description || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, description: e.target.value })} />
@@ -604,7 +651,6 @@ export default function SuperAdminDashboard() {
                                         </select>
                                         <input placeholder="Room Name" value={formData.name || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, name: e.target.value })} />
 
-                                        {/* 3 OPSI HARGA */}
                                         <div className="grid grid-cols-3 gap-4">
                                             <div className="col-span-3"><label className="text-xs font-bold text-gray-400 uppercase">Pricing Options</label></div>
                                             <div><input type="number" placeholder="Daily Price" value={formData.price_daily || ''} className="w-full p-3 border rounded-lg" onChange={e => setFormData({ ...formData, price_daily: e.target.value })} /></div>
@@ -617,10 +663,22 @@ export default function SuperAdminDashboard() {
                                             <div><input type="number" placeholder="Total Stock" value={formData.total_stock || ''} className="w-full p-3 border rounded-lg font-bold" onChange={e => setFormData({ ...formData, total_stock: e.target.value })} /></div>
                                         </div>
 
-                                        {/* IMAGE URL INPUT */}
-                                        <div className="border border-gray-200 rounded-lg p-3 bg-gray-50">
-                                            <label className="text-xs font-bold text-gray-400 uppercase">Image URL (Link Gambar)</label>
-                                            <input placeholder="https://..." value={formData.image_url || ''} className="w-full p-2 mt-1 bg-white border rounded outline-none" onChange={e => setFormData({ ...formData, image_url: e.target.value })} />
+                                        {/* PERUBAHAN: FILE UPLOAD LOKAL UNTUK ROOM */}
+                                        <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                                            <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2 mb-3">
+                                                <UploadCloud size={16} className="text-keenan-gold" /> Upload Room Image
+                                            </label>
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={handleFileChange}
+                                                className="w-full text-sm text-gray-500 file:mr-4 file:py-2.5 file:px-5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-keenan-gold/10 file:text-keenan-dark hover:file:bg-keenan-gold/20 cursor-pointer"
+                                            />
+                                            {(formData.preview_url || formData.image_url) && (
+                                                <div className="mt-4 relative w-full h-40 rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+                                                    <img src={formData.preview_url || formData.image_url} alt="Preview" className="w-full h-full object-cover" />
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div className="grid grid-cols-2 gap-2">
