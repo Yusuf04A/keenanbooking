@@ -267,18 +267,18 @@ export default function AdminDashboard() {
         return matchesStatus && matchesSearch;
     });
 
-    if (loading) return <div className="h-screen flex items-center justify-center bg-[#F8FAFC]"><Loader2 className="animate-spin text-blue-600" size={40} /></div>;
+    if (loading) return <div className="h-screen flex items-center justify-center bg-[#F8FAFC]"><Loader2 className="animate-spin text-keenan-gold" size={40} /></div>;
 
     return (
         <div className="min-h-screen bg-[#F8FAFC] flex font-sans text-gray-800">
             {/* SIDEBAR - TETAP DIPERTAHANKAN */}
-            <div className="w-64 bg-white border-r border-gray-100 p-6 hidden md:flex flex-col fixed h-full z-10">
+            <div className="w-64 bg-keenan-dark border-r border-gray-100 p-6 hidden md:flex flex-col fixed h-full z-10">
                 <div className="mb-10 text-center">
-                    <h2 className="text-2xl font-black text-gray-900 tracking-tight">KEENAN</h2>
+                    <h2 className="text-2xl font-black text-white tracking-tight">KEENAN</h2>
                     <p className="text-[10px] tracking-[0.2em] uppercase text-gray-400 font-bold">Workspace</p>
                 </div>
                 <nav className="space-y-1">
-                    <button className="w-full flex items-center gap-3 bg-blue-50 text-blue-700 p-3 rounded-xl font-bold"><LayoutDashboard size={18} /> Dashboard</button>
+                    <button className="w-full flex items-center gap-3 bg-keenan-gold text-white p-3 rounded-xl font-bold"><LayoutDashboard size={18} /> Dashboard</button>
                     <button onClick={() => navigate('/admin/calendar')} className="w-full flex items-center gap-3 hover:bg-gray-50 p-3 rounded-xl text-gray-500 font-medium transition-all"><Calendar size={18} /> Calendar</button>
                 </nav>
                 <button onClick={handleLogout} className="mt-auto flex items-center justify-center gap-2 p-3 rounded-xl text-gray-400 hover:bg-red-50 hover:text-red-500 font-bold text-sm transition-colors">
