@@ -4,8 +4,34 @@ import { api } from '../../lib/api';
 import {
     MapPin, Users, Wifi, Wind, Coffee, ArrowLeft, Loader2,
     Tv, Car, Utensils, Droplets, MonitorPlay, AlertCircle,
-    ChevronDown, ChevronUp, Camera, CheckCircle
+    ChevronDown, ChevronUp, Camera, CheckCircle, X, ChevronLeft, ChevronRight, ExternalLink
 } from 'lucide-react';
+
+// --- STANDALONE INTERACTIVE MAP COMPONENT (Google Maps Embed, no API key) ---
+const InteractiveMap = ({ address, propertyName }: { address: string; propertyName: string }) => {
+    const src = `https://maps.google.com/maps?q=${encodeURIComponent(address)}&output=embed&z=16`;
+    return (
+        <div className="h-72 rounded-2xl border border-gray-200 overflow-hidden relative">
+            <iframe
+                src={src}
+                width="100%"
+                height="100%"
+                style={{ border: 0 }}
+                allowFullScreen
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                title={propertyName}
+            />
+            <a
+                href={`https://maps.google.com/maps/search/${encodeURIComponent(address)}`}
+                target="_blank" rel="noopener noreferrer"
+                className="absolute bottom-3 right-3 z-10 bg-white text-gray-700 px-4 py-2 rounded-full text-xs font-bold shadow-lg flex items-center gap-1.5 hover:bg-gray-50 border border-gray-100"
+            >
+                <ExternalLink size={12} /> Open in Google Maps
+            </a>
+        </div>
+    );
+};
 
 const PropertyDetails = () => {
     const { id } = useParams();
@@ -16,6 +42,10 @@ const PropertyDetails = () => {
     const [loading, setLoading] = useState(true);
     const [showAllFacilities, setShowAllFacilities] = useState(false);
     const [showAllPropertyFacilities, setShowAllPropertyFacilities] = useState(false);
+
+    // --- LIGHTBOX STATE ---
+    const [showLightbox, setShowLightbox] = useState(false);
+    const [lightboxIndex, setLightboxIndex] = useState(0);
 
     // --- REAL-TIME STOCK STATE ---
     const [realTimeStock, setRealTimeStock] = useState<Record<string, number>>({});
@@ -139,6 +169,19 @@ const PropertyDetails = () => {
         return <CheckCircle size={18} className="text-gray-400 shrink-0" />;
     };
 
+    // --- LIGHTBOX HELPERS ---
+    const getAllImages = () => {
+        const imgs: string[] = [];
+        if (property?.image_url) imgs.push(property.image_url);
+        if (property?.gallery_images?.length) imgs.push(...property.gallery_images);
+        return imgs.length > 0 ? imgs : ['https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=2070'];
+    };
+    const openLightbox = (idx: number = 0) => { setLightboxIndex(idx); setShowLightbox(true); document.body.style.overflow = 'hidden'; };
+    const closeLightbox = () => { setShowLightbox(false); document.body.style.overflow = ''; };
+    const lightboxNext = () => { const all = getAllImages(); setLightboxIndex(i => (i + 1) % all.length); };
+    const lightboxPrev = () => { const all = getAllImages(); setLightboxIndex(i => (i - 1 + all.length) % all.length); };
+
+
     if (loading) return (
         <div className="h-screen flex items-center justify-center bg-[#FEFBF3]">
             <Loader2 className="animate-spin text-keenan-gold" size={40} />
@@ -208,8 +251,10 @@ const PropertyDetails = () => {
                                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                     />
                                     {idx === 3 && (
-                                        <button className="absolute bottom-3 right-3 bg-black/80 text-white px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 hover:bg-black transition-colors">
-                                            <Camera size={12} /> Show all photos
+                                        <button
+                                            onClick={() => openLightbox(0)}
+                                            className="absolute bottom-3 right-3 bg-black/80 text-white px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 hover:bg-black transition-colors">
+                                            <Camera size={12} /> Show all photos ({getAllImages().length})
                                         </button>
                                     )}
                                 </div>
@@ -425,7 +470,7 @@ const PropertyDetails = () => {
                 </div>
             )}
 
-            {/* --- LOCATION --- */}
+            {/* --- LOCATION (Interactive Map) --- */}
             <div className="bg-white py-12 border-t border-gray-100">
                 <div className="container mx-auto max-w-7xl px-6">
                     <h2 className="text-2xl font-serif font-bold text-gray-900 mb-4">Location</h2>
@@ -433,24 +478,56 @@ const PropertyDetails = () => {
                         <MapPin size={14} className="text-red-500 shrink-0" />
                         {property.address}
                     </p>
-                    <div className="rounded-lg overflow-hidden border border-gray-200 h-72 relative group cursor-pointer">
-                        <img
-                            src="https://images.unsplash.com/photo-1524661135-423995f22d0b?q=80&w=2074"
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                            alt="Map"
-                        />
-                        <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                            <div className="bg-white px-5 py-2.5 rounded-full text-sm font-bold shadow-lg flex items-center gap-2 hover:bg-gray-50">
-                                <MapPin size={14} className="text-red-500" />
-                                View on Google Maps
-                            </div>
-                        </div>
-                    </div>
+                    <InteractiveMap address={property.address} propertyName={property.name} />
                 </div>
             </div>
+
+            {/* --- GALLERY LIGHTBOX OVERLAY --- */}
+            {showLightbox && (() => {
+                const allImgs = getAllImages();
+                return (
+                    <div
+                        className="fixed inset-0 z-[9999] bg-black/95 flex flex-col"
+                        onKeyDown={(e) => { if (e.key === 'Escape') closeLightbox(); if (e.key === 'ArrowRight') lightboxNext(); if (e.key === 'ArrowLeft') lightboxPrev(); }}
+                        tabIndex={0}
+                    >
+                        {/* Top Bar */}
+                        <div className="flex justify-between items-center p-4 shrink-0">
+                            <p className="text-white font-medium text-sm">{property.name} — <span className="text-gray-400">{lightboxIndex + 1} / {allImgs.length}</span></p>
+                            <button onClick={closeLightbox} className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"><X size={24} /></button>
+                        </div>
+                        {/* Main Image */}
+                        <div className="flex-1 flex items-center justify-center relative">
+                            <button onClick={lightboxPrev} className="absolute left-4 z-10 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors backdrop-blur-sm">
+                                <ChevronLeft size={28} />
+                            </button>
+                            <img
+                                key={lightboxIndex}
+                                src={allImgs[lightboxIndex]}
+                                alt={`Photo ${lightboxIndex + 1}`}
+                                className="max-h-[75vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+                            />
+                            <button onClick={lightboxNext} className="absolute right-4 z-10 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors backdrop-blur-sm">
+                                <ChevronRight size={28} />
+                            </button>
+                        </div>
+                        {/* Thumbnail Strip */}
+                        <div className="flex gap-2 p-4 overflow-x-auto justify-center shrink-0">
+                            {allImgs.map((img, idx) => (
+                                <button key={idx} onClick={() => setLightboxIndex(idx)}
+                                    className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${idx === lightboxIndex ? 'border-white scale-105' : 'border-transparent opacity-50 hover:opacity-80'
+                                        }`}
+                                >
+                                    <img src={img} alt={`thumb-${idx}`} className="w-full h-full object-cover" />
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                );
+            })()}
 
         </div>
     );
 };
 
-export default PropertyDetails; 
+export default PropertyDetails;

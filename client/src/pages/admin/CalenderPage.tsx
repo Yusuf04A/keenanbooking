@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { api } from '../../lib/api'; // <--- API LARAVEL
-import { sendWhatsAppInvoice } from '../../lib/fonnte'; // <--- IMPORT PENTING UNTUK WA
+import { api } from '../../lib/api';
+import { sendWhatsAppInvoice } from '../../lib/fonnte';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Calendar as CalendarIcon, User, Plus, X, Phone, Mail, MessageSquare, AlertCircle, Globe } from 'lucide-react';
+import { LayoutDashboard, LogOut as LogOutIcon, Calendar as CalendarIcon, Loader2, User, Plus, X, Phone, Mail, MessageSquare, AlertCircle, Globe } from 'lucide-react';
 
 export default function CalendarPage() {
     const navigate = useNavigate();
@@ -232,33 +232,51 @@ export default function CalendarPage() {
         }
     };
 
+    const handleLogout = () => {
+        localStorage.clear();
+        navigate('/admin/login');
+    };
+
     if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-keenan-gold" size={40} /></div>;
 
     return (
-        <div className="min-h-screen bg-gray-50 font-sans text-keenan-dark pb-10">
-            {/* Header */}
-            <div className="bg-white border-b border-gray-100 p-6 mb-8 shadow-sm">
-                <div className="container mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-                    <div className="flex items-center gap-6">
-                        <button onClick={() => navigate('/admin/dashboard')} className="p-3 hover:bg-gray-50 rounded-xl text-keenan-gold border border-gray-100 transition-all shadow-sm">
-                            <ArrowLeft size={20} />
-                        </button>
-                        <div>
-                            <div className="flex items-center gap-2 mb-1">
-                                <CalendarIcon size={18} className="text-keenan-gold" />
-                                <h1 className="text-2xl font-serif font-bold tracking-tight">Reservation Calendar</h1>
-                            </div>
-                            <p className="text-gray-400 text-xs uppercase tracking-[0.2em] font-bold">Scope: {adminScope}</p>
-                        </div>
-                    </div>
-                    <button onClick={() => setIsModalOpen(true)} className="bg-keenan-dark text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-black transition-all shadow-lg text-sm tracking-widest">
-                        <Plus size={18} /> ADD MANUAL BOOKING
-                    </button>
+        <div className="min-h-screen bg-[#F8FAFC] flex font-sans text-gray-800">
+            {/* SIDEBAR - Sama persis dengan Dashboard.tsx */}
+            <div className="w-64 bg-keenan-dark border-r border-gray-100 p-6 hidden md:flex flex-col fixed h-full z-10">
+                <div className="mb-10 text-center">
+                    <h2 className="text-2xl font-black text-white tracking-tight">KEENAN</h2>
+                    <p className="text-[10px] tracking-[0.2em] uppercase text-gray-400 font-bold">Workspace</p>
                 </div>
+                <nav className="space-y-1">
+                    <button onClick={() => navigate('/admin/dashboard')} className="w-full flex items-center gap-3 hover:bg-gray-50/10 text-gray-400 p-3 rounded-xl font-medium transition-all">
+                        <LayoutDashboard size={18} /> Dashboard
+                    </button>
+                    <button className="w-full flex items-center gap-3 bg-keenan-gold text-white p-3 rounded-xl font-bold">
+                        <CalendarIcon size={18} /> Calendar
+                    </button>
+                </nav>
+                <button onClick={handleLogout} className="mt-auto flex items-center justify-center gap-2 p-3 rounded-xl text-gray-400 hover:bg-red-50/10 hover:text-red-400 font-bold text-sm transition-colors">
+                    <LogOutIcon size={18} /> Logout
+                </button>
             </div>
 
-            <div className="container mx-auto px-4 lg:px-8">
-                <div className="bg-white p-4 md:p-8 rounded-3xl shadow-xl border border-gray-100 custom-calendar overflow-hidden">
+            {/* MAIN CONTENT */}
+            <div className="flex-1 md:ml-64 p-6 lg:p-8 overflow-x-hidden">
+                {/* Header */}
+                <div className="flex justify-between items-center mb-8">
+                    <div>
+                        <div className="flex items-center gap-2 mb-1">
+                            <CalendarIcon size={18} className="text-keenan-gold" />
+                            <h1 className="text-2xl font-bold tracking-tight text-gray-900">Reservation Calendar</h1>
+                        </div>
+                        <p className="text-gray-400 text-xs uppercase tracking-[0.2em] font-bold">Scope: {adminScope}</p>
+                    </div>
+                    <button onClick={() => setIsModalOpen(true)} className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-black transition-all shadow-lg text-sm">
+                        <Plus size={18} /> Add Manual Booking
+                    </button>
+                </div>
+
+                <div className="bg-white p-4 md:p-8 rounded-3xl shadow-sm border border-gray-100 custom-calendar overflow-hidden">
                     <FullCalendar
                         plugins={[dayGridPlugin, interactionPlugin]}
                         initialView="dayGridMonth"
@@ -304,8 +322,8 @@ export default function CalendarPage() {
                                                 type="button"
                                                 onClick={() => setNewBooking({ ...newBooking, booking_source: plat.slug })}
                                                 className={`px-4 py-2 rounded-lg text-xs font-bold uppercase border transition-all ${newBooking.booking_source === plat.slug
-                                                        ? 'bg-keenan-gold text-white border-keenan-gold shadow-md'
-                                                        : 'bg-white text-gray-500 border-gray-200 hover:border-keenan-gold hover:text-keenan-dark'
+                                                    ? 'bg-keenan-gold text-white border-keenan-gold shadow-md'
+                                                    : 'bg-white text-gray-500 border-gray-200 hover:border-keenan-gold hover:text-keenan-dark'
                                                     }`}
                                             >
                                                 {plat.name}
