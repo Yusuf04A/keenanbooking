@@ -11,6 +11,7 @@ use Midtrans\Snap;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\BookingConfirmation;
 use Illuminate\Support\Facades\Log;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class BookingController extends Controller
 {
@@ -48,11 +49,11 @@ class BookingController extends Controller
         $conflictingBookings = Booking::where('room_type_id', $request->room_type_id)
             ->whereIn('status', ['paid', 'confirmed', 'checked_in', 'pending']) // Pending juga dihitung biar gak rebutan saat bayar
             ->where(function ($query) use ($checkIn, $checkOut) {
-                // Rumus Tabrakan Tanggal:
-                // (Start A < End B) && (End A > Start B)
-                $query->where('check_in_date', '<', $checkOut)
-                    ->where('check_out_date', '>', $checkIn);
-            })
+            // Rumus Tabrakan Tanggal:
+            // (Start A < End B) && (End A > Start B)
+            $query->where('check_in_date', '<', $checkOut)
+                ->where('check_out_date', '>', $checkIn);
+        })
             ->count();
 
         // Ambil Kapasitas Asli Kamar (Misal: 5 kamar)
@@ -80,12 +81,13 @@ class BookingController extends Controller
             if ($isManual) {
                 // Jika input manual admin, buat token dummy aja (gak perlu ke Midtrans)
                 $snapToken = 'MANUAL-' . time();
-            } else {
+            }
+            else {
                 // Jika dari Website User, minta token beneran ke Midtrans
                 $params = [
                     'transaction_details' => [
                         'order_id' => $bookingCode,
-                        'gross_amount' => (int) $request->total_price,
+                        'gross_amount' => (int)$request->total_price,
                     ],
                     'customer_details' => [
                         'first_name' => $request->customer_name,
@@ -119,7 +121,8 @@ class BookingController extends Controller
                 'booking' => $booking
             ]);
 
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }
     }
@@ -143,7 +146,8 @@ class BookingController extends Controller
                 // Kirim Email
                 try {
                     Mail::to($booking->customer_email)->send(new BookingConfirmation($booking));
-                } catch (\Exception $e) {
+                }
+                catch (\Exception $e) {
                     Log::error("Gagal kirim email: " . $e->getMessage());
                 }
             }
@@ -176,12 +180,40 @@ class BookingController extends Controller
             try {
                 // Pastikan class Mail diimport di atas: use Illuminate\Support\Facades\Mail;
                 Mail::to($booking->customer_email)->send(new BookingConfirmation($booking));
-            } catch (\Exception $e) {
+            }
+            catch (\Exception $e) {
                 Log::error("Gagal kirim email manual: " . $e->getMessage());
             }
         }
         // ----------------------------------------------------------
 
         return response()->json(['message' => 'Status updated', 'booking' => $booking]);
+    }
+
+    /**
+     * Generate dan download invoice PDF untuk booking tertentu.
+     * Route: GET /api/bookings/{id}/invoice-pdf (publik)
+     */
+    public function downloadInvoice($id)
+    {
+        $booking = Booking::with(['property', 'roomType'])->findOrFail($id);
+
+        // Hitung malam
+        $checkIn = new \DateTime($booking->check_in_date);
+        $checkOut = new \DateTime($booking->check_out_date);
+        $nights = max(1, $checkIn->diff($checkOut)->days);
+
+        // Format harga
+        $formatted_price = 'Rp ' . number_format($booking->total_price, 0, ',', '.');
+
+        $pdf = Pdf::loadView('pdf.invoice', compact('booking', 'nights', 'formatted_price'))
+            ->setPaper('a4', 'portrait')
+            ->setOption('defaultFont', 'helvetica')
+            ->setOption('isHtml5ParserEnabled', true)
+            ->setOption('isRemoteEnabled', false);
+
+        $filename = 'invoice-' . $booking->booking_code . '.pdf';
+
+        return $pdf->download($filename);
     }
 }

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, LogOut as LogOutIcon, Calendar, Search,
     CheckCircle, XCircle, Clock, Loader2, User,
-    LogIn, X, Globe, Smartphone, Printer, Phone, Mail, MapPin, MessageSquare, CreditCard, DollarSign, TrendingUp, Users, FileText
+    LogIn, X, Globe, Smartphone, Download, Phone, Mail, MapPin, MessageSquare, CreditCard, DollarSign, TrendingUp, Users, FileText
 } from 'lucide-react';
 
 // --- NEW COMPONENT: DONUT CHART ---
@@ -129,7 +129,7 @@ export default function AdminDashboard() {
         let statusCounts = { paid: 0, confirmed: 0, pending: 0, checked_in: 0, checked_out: 0, cancelled: 0 };
         let venueRev: Record<string, number> = {};
         let channelCount: Record<string, number> = {};
-        
+
         // Buat array untuk 6 bulan terakhir
         const currentMonth = new Date().getMonth();
         let mTrend = new Array(6).fill(0);
@@ -148,7 +148,7 @@ export default function AdminDashboard() {
                 tRev += price;
                 cCount++;
                 venueRev[venue] = (venueRev[venue] || 0) + price;
-                
+
                 // Hitung Trend Bulanan (6 bulan terakhir)
                 if (b.check_in_date) {
                     const bMonth = new Date(b.check_in_date).getMonth();
@@ -157,7 +157,7 @@ export default function AdminDashboard() {
                     if (diff < 0) diff += 12; // Handle lintas tahun
                     if (diff < 6) {
                         // Index 0 adalah bulan terlama (current - 5), index 5 adalah bulan ini (current)
-                        mTrend[5 - diff] += price; 
+                        mTrend[5 - diff] += price;
                     }
                 }
             } else if (status === 'pending') {
@@ -227,14 +227,14 @@ export default function AdminDashboard() {
     };
 
     const formatRupiah = (amount: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount);
-    
+
     // Label bulan untuk chart trend
     const getMonthLabels = () => {
         const labels = [];
         const d = new Date();
-        for(let i=5; i>=0; i--) {
+        for (let i = 5; i >= 0; i--) {
             const pastD = new Date(d.getFullYear(), d.getMonth() - i, 1);
-            labels.push(pastD.toLocaleDateString('en-US', {month: 'short'}));
+            labels.push(pastD.toLocaleDateString('en-US', { month: 'short' }));
         }
         return labels;
     }
@@ -287,8 +287,8 @@ export default function AdminDashboard() {
             </div>
 
             {/* MAIN CONTENT - DESAIN BARU */}
-            <div className="flex-1 md:ml-64 p-6 lg:p-8 overflow-x-hidden"> 
-                
+            <div className="flex-1 md:ml-64 p-6 lg:p-8 overflow-x-hidden">
+
                 {/* Header Profile */}
                 <div className="flex justify-end items-center mb-8">
                     <div className="flex items-center gap-3">
@@ -345,18 +345,18 @@ export default function AdminDashboard() {
 
                 {/* --- 4 CHARTS GRID --- */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
-                    
+
                     {/* 1. REVENUE TREND (Line Chart Simpel) */}
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                         <h3 className="font-semibold text-gray-800 mb-1">Revenue Trend</h3>
                         <p className="text-[10px] text-gray-400 mb-6">Revenue over the last 6 months</p>
-                        
+
                         <div className="relative h-48 w-full flex items-end justify-between pt-4">
                             {/* Garis Horizontal Latar */}
                             <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
                                 {[0, 1, 2, 3].map(i => <div key={i} className="border-t border-dashed border-gray-100 w-full h-0"></div>)}
                             </div>
-                            
+
                             {/* Titik Line Chart Sederhana menggunakan div */}
                             <div className="absolute inset-0 flex items-end justify-between px-2 pb-6">
                                 {stats.monthlyTrend.map((val, i) => {
@@ -392,7 +392,7 @@ export default function AdminDashboard() {
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                         <h3 className="font-semibold text-gray-800 mb-1">Revenue by Venue</h3>
                         <p className="text-[10px] text-gray-400 mb-6">Top performing venues</p>
-                        
+
                         {stats.venueRevenue.length === 0 ? (
                             <div className="h-40 flex items-center justify-center text-sm text-gray-400">No venue data available</div>
                         ) : (
@@ -554,7 +554,7 @@ export default function AdminDashboard() {
                                 <button onClick={() => setSelectedBooking(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500"><X size={24} /></button>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-8 mb-8">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-8 mb-8">
                                 <div>
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Room Information</label>
                                     <div className="flex items-start gap-3">
@@ -594,7 +594,7 @@ export default function AdminDashboard() {
                             </div>
 
                             {/* FOOTER ACTIONS */}
-                            <div className="mt-auto flex gap-3">
+                            <div className="mt-auto flex flex-wrap gap-3">
                                 {selectedBooking.status === 'paid' && (
                                     <button onClick={() => handleStatusUpdate('checked_in')} disabled={isUpdating} className="flex-1 bg-blue-600 text-white py-3.5 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-md flex items-center justify-center gap-2"><LogIn size={18} /> Process Check-In</button>
                                 )}
@@ -606,8 +606,11 @@ export default function AdminDashboard() {
                                 )}
 
                                 {selectedBooking.status !== 'cancelled' && (
-                                    <button onClick={() => window.print()} className="px-6 bg-white border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center justify-center gap-2 transition-all">
-                                        <Printer size={18} /> Print
+                                    <button
+                                        onClick={() => window.open(`http://127.0.0.1:8000/api/bookings/${selectedBooking.id}/invoice-pdf`, '_blank')}
+                                        className="px-5 bg-white border border-gray-200 rounded-xl font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 flex items-center justify-center gap-2 transition-all"
+                                    >
+                                        <Download size={18} /> Download PDF
                                     </button>
                                 )}
                             </div>

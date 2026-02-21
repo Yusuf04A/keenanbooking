@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../../lib/api'; 
+import { api } from '../../lib/api';
 import { useNavigate } from 'react-router-dom';
 import {
     MapPin, ArrowRight,
@@ -72,7 +72,7 @@ export default function BookingSearch() {
             </nav>
 
             {/* --- HERO SECTION --- */}
-            <div className="relative h-[85vh] w-full bg-gray-900">
+            <div className="relative h-[60vh] md:h-[85vh] w-full bg-gray-900">
                 <img
                     src="https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?q=80&w=2070"
                     className="w-full h-full object-cover opacity-60"
@@ -88,14 +88,14 @@ export default function BookingSearch() {
                     </button>
                 </div>
 
-                {/* --- SEARCH BAR (Floating) --- */}
-                <div id="search-bar" className="absolute -bottom-16 left-0 right-0 container mx-auto px-4 z-40">
-                    <div className="bg-white p-6 shadow-2xl flex flex-col md:flex-row gap-4 items-end justify-between max-w-6xl mx-auto rounded-sm border-t-4 border-keenan-gold">
+                {/* --- SEARCH BAR (Mobile: bawah Hero, Desktop: Floating) --- */}
+                <div id="search-bar" className="absolute bottom-0 md:-bottom-16 left-0 right-0 px-4 z-40">
+                    <div className="bg-white p-4 md:p-6 shadow-2xl flex flex-col md:flex-row gap-3 md:gap-4 items-stretch md:items-end justify-between max-w-6xl mx-auto rounded-lg md:rounded-sm border-t-4 border-keenan-gold">
 
                         <div className="flex-1 w-full">
                             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Property</label>
                             <select
-                                className="w-full p-3 bg-gray-50 border-b-2 border-transparent focus:border-keenan-gold outline-none font-serif text-lg"
+                                className="w-full p-3 bg-gray-50 border-b-2 border-transparent focus:border-keenan-gold outline-none font-serif text-base md:text-lg"
                                 value={selectedPropId}
                                 onChange={e => setSelectedPropId(e.target.value)}
                             >
@@ -104,44 +104,46 @@ export default function BookingSearch() {
                             </select>
                         </div>
 
-                        <div className="flex-1 w-full">
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Check-In</label>
-                            <input type="date" className="w-full p-3 bg-gray-50 outline-none font-serif text-lg"
-                                onChange={e => setCheckIn(e.target.value)} />
+                        <div className="grid grid-cols-2 gap-3 flex-1">
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Check-In</label>
+                                <input type="date" className="w-full p-3 bg-gray-50 outline-none font-serif text-base"
+                                    onChange={e => setCheckIn(e.target.value)} />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Check-Out</label>
+                                <input type="date" className="w-full p-3 bg-gray-50 outline-none font-serif text-base"
+                                    onChange={e => setCheckOut(e.target.value)} />
+                            </div>
                         </div>
 
-                        <div className="flex-1 w-full">
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Check-Out</label>
-                            <input type="date" className="w-full p-3 bg-gray-50 outline-none font-serif text-lg"
-                                onChange={e => setCheckOut(e.target.value)} />
+                        <div className="flex gap-3 items-end">
+                            <div className="w-28">
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Guests</label>
+                                <select className="w-full p-3 bg-gray-50 outline-none font-serif text-base" onChange={e => setGuests(parseInt(e.target.value))}>
+                                    {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n} Person</option>)}
+                                </select>
+                            </div>
+                            <button
+                                onClick={handleSearch}
+                                className="flex-1 md:flex-none bg-keenan-gold text-white px-6 py-4 font-bold uppercase tracking-widest hover:bg-keenan-dark transition-all md:w-auto whitespace-nowrap rounded md:rounded-none"
+                            >
+                                Find Rooms
+                            </button>
                         </div>
-
-                        <div className="w-32">
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Guests</label>
-                            <select className="w-full p-3 bg-gray-50 outline-none font-serif text-lg" onChange={e => setGuests(parseInt(e.target.value))}>
-                                {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n} Person</option>)}
-                            </select>
-                        </div>
-
-                        <button
-                            onClick={handleSearch}
-                            className="bg-keenan-gold text-white px-8 py-4 h-full font-bold uppercase tracking-widest hover:bg-keenan-dark transition-all w-full md:w-auto"
-                        >
-                            Find Rooms
-                        </button>
                     </div>
                 </div>
             </div>
 
             {/* --- PROPERTIES GRID --- */}
-            <div id="properties" className="pt-32 pb-20 bg-[#FAFAFA]">
+            <div id="properties" className="pt-10 md:pt-28 pb-20 bg-[#FAFAFA]">
                 <div className="container mx-auto px-4 max-w-7xl">
-                    <div className="text-center mb-16">
+                    <div className="text-center mb-10 md:mb-16">
                         <p className="text-keenan-gold text-xs font-bold uppercase tracking-[0.2em] mb-3">Our Properties</p>
-                        <h2 className="text-4xl font-serif font-bold text-keenan-dark">Your Top Destination Vacation Home</h2>
+                        <h2 className="text-2xl md:text-4xl font-serif font-bold text-keenan-dark">Your Top Destination Vacation Home</h2>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
                         {properties.map((prop) => (
                             <div key={prop.id} className="group cursor-pointer bg-white flex flex-col shadow-sm hover:shadow-xl transition-shadow duration-300" onClick={() => navigate(`/property/${prop.id}`)}>
                                 <div className="h-72 overflow-hidden relative">

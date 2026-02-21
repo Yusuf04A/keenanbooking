@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-    CheckCircle, Home, MapPin, Printer,
+    CheckCircle, Home, MapPin, Download,
     FileText, Mail, Phone, ShieldCheck, Clock, User
 } from 'lucide-react';
 
@@ -10,6 +10,12 @@ export default function SuccessPage() {
 
     // Ambil data dari state navigasi
     const { booking } = location.state || {};
+
+    // Download PDF dari backend Laravel
+    const downloadPdf = () => {
+        if (!booking?.id) return;
+        window.open(`http://127.0.0.1:8000/api/bookings/${booking.id}/invoice-pdf`, '_blank');
+    };
 
     // --- Helper Formatter ---
     const formatDate = (dateString: string) => {
@@ -68,16 +74,7 @@ export default function SuccessPage() {
     }
 
     return (
-        <div className="min-h-screen bg-[#F5F6FA] font-sans print:bg-white">
-            
-            {/* CSS KHUSUS PRINT: Sembunyikan elemen yang tidak perlu */}
-            <style>{`
-                @media print {
-                    .no-print { display: none !important; }
-                    .print-area { box-shadow: none !important; border: 1px solid #ddd !important; }
-                    body { background-color: white !important; -webkit-print-color-adjust: exact; }
-                }
-            `}</style>
+        <div className="min-h-screen bg-[#F5F6FA] font-sans">
 
             {/* TOP BAR */}
             <div className="bg-keenan-dark text-white border-b border-white/10 print:bg-white print:text-black print:border-b-2 print:border-black">
@@ -111,14 +108,14 @@ export default function SuccessPage() {
                         </div>
                     </div>
 
-                    {/* Action Buttons (Disembunyikan saat Print) */}
+                    {/* Action Buttons */}
                     <div className="mt-8 flex flex-col sm:flex-row gap-3 no-print">
                         <button
-                            onClick={() => window.print()}
+                            onClick={downloadPdf}
                             className="bg-keenan-gold text-keenan-dark font-bold px-6 py-3 rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-2 shadow-md"
                         >
-                            <Printer size={18} />
-                            Cetak / Simpan PDF
+                            <Download size={18} />
+                            Download Invoice PDF
                         </button>
 
                         <button
@@ -318,14 +315,14 @@ export default function SuccessPage() {
                                     </div>
                                 </div>
 
-                                {/* TOMBOL ACTION - DISEMBUNYIKAN SAAT PRINT */}
-                                <div className="pt-4 no-print">
+                                {/* TOMBOL ACTION */}
+                                <div className="pt-4">
                                     <button
-                                        onClick={() => window.print()}
+                                        onClick={downloadPdf}
                                         className="w-full bg-keenan-dark text-white py-4 rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-2 shadow-md group"
                                     >
-                                        <Printer size={18} className="group-hover:scale-110 transition-transform" />
-                                        Cetak / Simpan PDF
+                                        <Download size={18} className="group-hover:scale-110 transition-transform" />
+                                        Download Invoice PDF
                                     </button>
 
                                     <button
