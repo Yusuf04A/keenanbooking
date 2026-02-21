@@ -10,7 +10,11 @@ class Property extends Model
 {
     use HasFactory, HasUuids; // <--- PENTING
 
-    protected $fillable = ['name', 'slug', 'address', 'description', 'image_url'];
+    protected $fillable = ['name', 'slug', 'address', 'description', 'image_url', 'gallery_images'];
+
+    protected $casts = [
+        'gallery_images' => 'array',
+    ];
 
     public function roomTypes()
     {

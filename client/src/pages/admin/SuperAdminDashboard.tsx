@@ -72,6 +72,9 @@ export default function SuperAdminDashboard() {
 
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
+    const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
+    const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
+    const [removedGalleryIndices, setRemovedGalleryIndices] = useState<number[]>([]);
 
     // Filter & Search
     const [selectedPropertyFilter, setSelectedPropertyFilter] = useState('all');
@@ -283,6 +286,23 @@ export default function SuperAdminDashboard() {
         }
     };
 
+    const handleGalleryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files) return;
+        const newFiles = Array.from(e.target.files);
+        const newPreviews = newFiles.map(f => URL.createObjectURL(f));
+        setGalleryFiles(prev => [...prev, ...newFiles]);
+        setGalleryPreviews(prev => [...prev, ...newPreviews]);
+    };
+
+    const handleRemoveNewGallery = (idx: number) => {
+        setGalleryFiles(prev => prev.filter((_, i) => i !== idx));
+        setGalleryPreviews(prev => prev.filter((_, i) => i !== idx));
+    };
+
+    const handleRemoveExistingGallery = (idx: number) => {
+        setRemovedGalleryIndices(prev => [...prev, idx]);
+    };
+
     const checkAvailability = async () => {
         setIsChecking(true);
         setAvailabilityMsg('');
@@ -340,8 +360,33 @@ export default function SuperAdminDashboard() {
                 const submitData = new FormData();
                 submitData.append('name', formData.name || ''); submitData.append('address', formData.address || ''); submitData.append('description', formData.description || '');
                 if (formData.image_file) submitData.append('image', formData.image_file);
-                if (editingId) { submitData.append('_method', 'PUT'); await api.post(`/admin/properties/${editingId}`, submitData, { headers: { 'Content-Type': 'multipart/form-data' } }); }
-                else await api.post('/admin/properties', submitData, { headers: { 'Content-Type': 'multipart/form-data' } });
+                // Kirim gallery files baru
+                galleryFiles.forEach(file => submitData.append('images[]', file));
+                // Kirim index gallery yang dihapus (satu per satu secara berurutan, sudah dihandle di backend)
+                if (editingId && removedGalleryIndices.length > 0) {
+                    // Sort descending agar penghapusan index tidak geser index berikutnya
+                    const sortedIndices = [...removedGalleryIndices].sort((a, b) => b - a);
+                    for (const idx of sortedIndices) {
+                        const tempData = new FormData();
+                        tempData.append('name', formData.name || ''); tempData.append('address', formData.address || ''); tempData.append('description', formData.description || '');
+                        tempData.append('remove_gallery_index', String(idx));
+                        tempData.append('_method', 'PUT');
+                        await api.post(`/admin/properties/${editingId}`, tempData, { headers: { 'Content-Type': 'multipart/form-data' } });
+                    }
+                    // Setelah hapus, upload gambar baru
+                    if (galleryFiles.length > 0 || formData.image_file) {
+                        const finalData = new FormData();
+                        finalData.append('name', formData.name || ''); finalData.append('address', formData.address || ''); finalData.append('description', formData.description || '');
+                        if (formData.image_file) finalData.append('image', formData.image_file);
+                        galleryFiles.forEach(file => finalData.append('images[]', file));
+                        finalData.append('_method', 'PUT');
+                        await api.post(`/admin/properties/${editingId}`, finalData, { headers: { 'Content-Type': 'multipart/form-data' } });
+                    }
+                } else if (editingId) {
+                    submitData.append('_method', 'PUT'); await api.post(`/admin/properties/${editingId}`, submitData, { headers: { 'Content-Type': 'multipart/form-data' } });
+                } else {
+                    await api.post('/admin/properties', submitData, { headers: { 'Content-Type': 'multipart/form-data' } });
+                }
             }
 
             if (modalType === 'room') {
@@ -385,6 +430,10 @@ export default function SuperAdminDashboard() {
         setModalType(type); setEditingId(data?.id);
         setFormData({ ...data, image_file: null, preview_url: null } || {});
         setSelectedFacilities(data?.facilities || []);
+        // Reset gallery state
+        setGalleryFiles([]);
+        setGalleryPreviews([]);
+        setRemovedGalleryIndices([]);
 
         if (type === 'manual_booking') {
             setNewBooking({
@@ -809,9 +858,57 @@ export default function SuperAdminDashboard() {
                                         <input placeholder="Hotel Name" value={formData.name || ''} className="w-full p-3 border rounded-xl outline-none focus:border-blue-500" onChange={e => setFormData({ ...formData, name: e.target.value })} />
                                         <input placeholder="Address" value={formData.address || ''} className="w-full p-3 border rounded-xl outline-none focus:border-blue-500" onChange={e => setFormData({ ...formData, address: e.target.value })} />
                                         <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
-                                            <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2 mb-3"><UploadCloud size={16} className="text-blue-500" /> Upload Property Image</label>
+                                            <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2 mb-3"><UploadCloud size={16} className="text-blue-500" /> Upload Cover Image</label>
                                             <input type="file" accept="image/*" onChange={handleFileChange} className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-100 file:text-blue-600 cursor-pointer" />
                                             {(formData.preview_url || formData.image_url) && (<div className="mt-4 relative w-full h-40 rounded-xl overflow-hidden border border-gray-200"><img src={formData.preview_url || formData.image_url} alt="Preview" className="w-full h-full object-cover" /></div>)}
+                                        </div>
+
+                                        {/* GALLERY IMAGES */}
+                                        <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                                            <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2 mb-3"><UploadCloud size={16} className="text-purple-500" /> Photo Gallery (max 5 foto)</label>
+                                            <input
+                                                type="file" accept="image/*" multiple
+                                                onChange={handleGalleryChange}
+                                                className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-100 file:text-purple-600 cursor-pointer"
+                                            />
+                                            {/* Tampilkan gallery yang sudah ada (saat edit) */}
+                                            {formData.gallery_images && formData.gallery_images.length > 0 && (
+                                                <div className="mt-3">
+                                                    <p className="text-[10px] text-gray-400 font-bold uppercase mb-2">Foto Tersimpan</p>
+                                                    <div className="grid grid-cols-4 gap-2">
+                                                        {(formData.gallery_images as string[]).map((url, idx) => (
+                                                            removedGalleryIndices.includes(idx) ? null : (
+                                                                <div key={idx} className="relative group rounded-lg overflow-hidden border border-gray-200 h-20">
+                                                                    <img src={url} alt={`Gallery ${idx + 1}`} className="w-full h-full object-cover" />
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleRemoveExistingGallery(idx)}
+                                                                        className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                    ><X size={10} /></button>
+                                                                </div>
+                                                            )
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {/* Preview file-file gallery baru */}
+                                            {galleryPreviews.length > 0 && (
+                                                <div className="mt-3">
+                                                    <p className="text-[10px] text-gray-400 font-bold uppercase mb-2">Preview Baru</p>
+                                                    <div className="grid grid-cols-4 gap-2">
+                                                        {galleryPreviews.map((url, idx) => (
+                                                            <div key={idx} className="relative group rounded-lg overflow-hidden border border-purple-200 h-20">
+                                                                <img src={url} alt={`New ${idx + 1}`} className="w-full h-full object-cover" />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleRemoveNewGallery(idx)}
+                                                                    className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                ><X size={10} /></button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                         <textarea placeholder="Description" rows={3} value={formData.description || ''} className="w-full p-3 border rounded-xl outline-none focus:border-blue-500" onChange={e => setFormData({ ...formData, description: e.target.value })} />
                                         <button onClick={handleSave} disabled={uploading} className="w-full bg-gray-900 text-white py-3.5 rounded-xl font-bold flex justify-center hover:bg-black">{uploading ? <Loader2 className="animate-spin" /> : "Save Property"}</button>

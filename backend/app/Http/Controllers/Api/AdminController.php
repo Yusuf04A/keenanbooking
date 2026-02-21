@@ -20,19 +20,30 @@ class AdminController extends Controller
             'name' => 'required',
             'address' => 'required',
             'description' => 'nullable',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:3072' // Max 3MB
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:3072',
+            'images.*' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:3072'
         ]);
 
         $data['slug'] = Str::slug($data['name']);
-        
-        // Default Image
+
+        // Default Image (gambar utama)
         $data['image_url'] = 'https://images.unsplash.com/photo-1566073771259-6a8506099945';
 
-        // Jika ada file yang di-upload
+        // Jika ada file gambar utama yang di-upload
         if ($request->hasFile('image')) {
             $path = $request->file('image')->store('properties', 'public');
             $data['image_url'] = asset('storage/' . $path);
         }
+
+        // Upload gallery images (multiple)
+        $galleryUrls = [];
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $imgFile) {
+                $path = $imgFile->store('properties/gallery', 'public');
+                $galleryUrls[] = asset('storage/' . $path);
+            }
+        }
+        $data['gallery_images'] = !empty($galleryUrls) ? $galleryUrls : null;
 
         $prop = Property::create($data);
         return response()->json($prop);
@@ -41,28 +52,50 @@ class AdminController extends Controller
     public function updateProperty(Request $request, $id)
     {
         $prop = Property::findOrFail($id);
-        
+
         $data = $request->validate([
             'name' => 'required',
             'address' => 'required',
             'description' => 'nullable',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:3072'
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:3072',
+            'images.*' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:3072',
+            'remove_gallery_index' => 'nullable|integer'
         ]);
 
         $data['slug'] = Str::slug($data['name']);
 
-        // Handle Image Upload saat Edit
+        // Handle gambar utama (image_url)
         if ($request->hasFile('image')) {
-            // Hapus gambar lama jika ada di server lokal
             if ($prop->image_url && str_contains($prop->image_url, 'storage/properties/')) {
                 $oldPath = str_replace(asset('storage/'), '', $prop->image_url);
                 Storage::disk('public')->delete($oldPath);
             }
-            
-            // Upload gambar baru
             $path = $request->file('image')->store('properties', 'public');
             $data['image_url'] = asset('storage/' . $path);
         }
+
+        // Handle penghapusan satu gambar gallery
+        $currentGallery = $prop->gallery_images ?? [];
+        if ($request->has('remove_gallery_index')) {
+            $idx = (int)$request->remove_gallery_index;
+            if (isset($currentGallery[$idx])) {
+                $urlToDelete = $currentGallery[$idx];
+                if (str_contains($urlToDelete, 'storage/properties/')) {
+                    $oldPath = str_replace(asset('storage/'), '', $urlToDelete);
+                    Storage::disk('public')->delete($oldPath);
+                }
+                array_splice($currentGallery, $idx, 1);
+            }
+        }
+
+        // Upload gallery images baru (tambahkan ke gallery yang ada)
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $imgFile) {
+                $path = $imgFile->store('properties/gallery', 'public');
+                $currentGallery[] = asset('storage/' . $path);
+            }
+        }
+        $data['gallery_images'] = !empty($currentGallery) ? $currentGallery : null;
 
         $prop->update($data);
         return response()->json($prop);
@@ -71,11 +104,21 @@ class AdminController extends Controller
     public function destroyProperty($id)
     {
         $prop = Property::findOrFail($id);
-        
-        // Hapus file gambar dari harddisk (kalau ada dan bukan link luar)
+
+        // Hapus gambar utama dari storage
         if ($prop->image_url && str_contains($prop->image_url, 'storage/properties/')) {
             $oldPath = str_replace(asset('storage/'), '', $prop->image_url);
             Storage::disk('public')->delete($oldPath);
+        }
+
+        // Hapus semua gambar gallery dari storage
+        if (!empty($prop->gallery_images)) {
+            foreach ($prop->gallery_images as $galleryUrl) {
+                if (str_contains($galleryUrl, 'storage/properties/')) {
+                    $oldPath = str_replace(asset('storage/'), '', $galleryUrl);
+                    Storage::disk('public')->delete($oldPath);
+                }
+            }
         }
 
         $prop->delete();
@@ -88,9 +131,9 @@ class AdminController extends Controller
         $data = $request->validate([
             'property_id' => 'required',
             'name' => 'required',
-            'price_daily' => 'required|numeric',   
-            'price_weekly' => 'nullable|numeric',  
-            'price_monthly' => 'nullable|numeric', 
+            'price_daily' => 'required|numeric',
+            'price_weekly' => 'nullable|numeric',
+            'price_monthly' => 'nullable|numeric',
             'capacity' => 'required|numeric',
             'total_stock' => 'required|numeric',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:3072',
@@ -112,7 +155,7 @@ class AdminController extends Controller
     public function updateRoom(Request $request, $id)
     {
         $room = RoomType::findOrFail($id);
-        
+
         $data = $request->validate([
             'property_id' => 'required',
             'name' => 'required',
@@ -131,7 +174,7 @@ class AdminController extends Controller
                 $oldPath = str_replace(asset('storage/'), '', $room->image_url);
                 Storage::disk('public')->delete($oldPath);
             }
-            
+
             // Upload gambar baru
             $path = $request->file('image')->store('rooms', 'public');
             $data['image_url'] = asset('storage/' . $path);
@@ -144,7 +187,7 @@ class AdminController extends Controller
     public function destroyRoom($id)
     {
         $room = RoomType::findOrFail($id);
-        
+
         if ($room->image_url && str_contains($room->image_url, 'storage/rooms/')) {
             $oldPath = str_replace(asset('storage/'), '', $room->image_url);
             Storage::disk('public')->delete($oldPath);
@@ -179,7 +222,7 @@ class AdminController extends Controller
     public function updateStaff(Request $request, $id)
     {
         $admin = Admin::findOrFail($id);
-        $updateData = $request->except(['password']); 
+        $updateData = $request->except(['password']);
 
         if ($request->filled('password')) {
             $updateData['password'] = bcrypt($request->password);

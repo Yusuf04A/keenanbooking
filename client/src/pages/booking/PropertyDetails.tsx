@@ -27,7 +27,7 @@ const PropertyDetails = () => {
     const urlCheckOut = searchParams.get('checkOut');
 
     const today = new Date().toISOString().split('T')[0];
-    
+
     // Helper untuk mendapatkan tanggal esok hari dari suatu tanggal
     const getNextDay = (dateStr: string) => {
         const d = new Date(dateStr);
@@ -177,34 +177,46 @@ const PropertyDetails = () => {
 
             {/* --- PHOTO GRID --- */}
             <div className="container mx-auto max-w-7xl px-6 py-6">
-                <div className="grid grid-cols-4 grid-rows-2 gap-2 h-[420px] rounded-2xl overflow-hidden">
-                    <div className="col-span-2 row-span-2 overflow-hidden">
-                        <img
-                            src={property.image_url || "https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=2070"}
-                            alt={property.name}
-                            className="w-full h-full object-cover hover:scale-105 transition-transform duration-700"
-                        />
-                    </div>
-                    {[
+                {/* Siapkan gallery images: gunakan gallery_images dari backend, atau fallback ke placeholder */}
+                {(() => {
+                    const galleryImages: string[] = property.gallery_images || [];
+                    const placeholderImages = [
                         "https://images.unsplash.com/photo-1611892440504-42a792e24d32?q=80&w=2070",
                         "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?q=80&w=2070",
                         "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=2070",
                         "https://images.unsplash.com/photo-1584132967334-10e028bd69f7?q=80&w=2070",
-                    ].map((img, idx) => (
-                        <div key={idx} className="relative overflow-hidden group">
-                            <img
-                                src={img}
-                                alt={`View ${idx + 1}`}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                            />
-                            {idx === 3 && (
-                                <button className="absolute bottom-3 right-3 bg-black/80 text-white px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 hover:bg-black transition-colors">
-                                    <Camera size={12} /> Show all photos
-                                </button>
-                            )}
+                    ];
+                    // Isi gallery sampai 4 slot dengan placeholder jika kurang
+                    const gridSmall: string[] = [];
+                    for (let i = 0; i < 4; i++) {
+                        gridSmall.push(galleryImages[i] || placeholderImages[i]);
+                    }
+                    return (
+                        <div className="grid grid-cols-4 grid-rows-2 gap-2 h-[420px] rounded-2xl overflow-hidden">
+                            <div className="col-span-2 row-span-2 overflow-hidden">
+                                <img
+                                    src={property.image_url || "https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=2070"}
+                                    alt={property.name}
+                                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-700"
+                                />
+                            </div>
+                            {gridSmall.map((img, idx) => (
+                                <div key={idx} className="relative overflow-hidden group">
+                                    <img
+                                        src={img}
+                                        alt={`View ${idx + 1}`}
+                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                    />
+                                    {idx === 3 && (
+                                        <button className="absolute bottom-3 right-3 bg-black/80 text-white px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 hover:bg-black transition-colors">
+                                            <Camera size={12} /> Show all photos
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
                         </div>
-                    ))}
-                </div>
+                    );
+                })()}
             </div>
 
             {/* --- PROPERTY TITLE --- */}
@@ -441,4 +453,4 @@ const PropertyDetails = () => {
     );
 };
 
-export default PropertyDetails;
+export default PropertyDetails; 
