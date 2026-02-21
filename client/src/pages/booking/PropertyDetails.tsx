@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../../lib/api';
 import {
     MapPin, Users, Wifi, Wind, Coffee, ArrowLeft, Loader2,
@@ -10,6 +10,7 @@ import {
 const PropertyDetails = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
 
     const [property, setProperty] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -20,11 +21,35 @@ const PropertyDetails = () => {
     const [realTimeStock, setRealTimeStock] = useState<Record<string, number>>({});
     const [isCheckingStock, setIsCheckingStock] = useState(false);
 
-    // --- DATE & DURATION LOGIC ---
+    // --- MENGAMBIL DATA SINKRONISASI DARI URL (QUERY PARAMS) ---
+    const searchParams = new URLSearchParams(location.search);
+    const urlCheckIn = searchParams.get('checkIn');
+    const urlCheckOut = searchParams.get('checkOut');
+
     const today = new Date().toISOString().split('T')[0];
-    const [checkIn, setCheckIn] = useState(today);
-    const [durationType, setDurationType] = useState<'daily' | 'weekly' | 'monthly'>('daily');
-    const [duration, setDuration] = useState(1);
+    
+    // Helper untuk mendapatkan tanggal esok hari dari suatu tanggal
+    const getNextDay = (dateStr: string) => {
+        const d = new Date(dateStr);
+        d.setDate(d.getDate() + 1);
+        return d.toISOString().split('T')[0];
+    };
+
+    const defaultCheckOut = getNextDay(today);
+
+    // State lokal untuk menampung data pencarian
+    const [checkIn, setCheckIn] = useState(urlCheckIn || today);
+    const [checkOut, setCheckOut] = useState(urlCheckOut || defaultCheckOut);
+
+    // Kalkulasi Total Malam
+    const calculateNights = () => {
+        const start = new Date(checkIn);
+        const end = new Date(checkOut);
+        const diffTime = end.getTime() - start.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return diffDays > 0 ? diffDays : 1;
+    };
+    const totalNights = calculateNights();
 
     // 1. Fetch Data Properti Awal
     useEffect(() => {
@@ -41,21 +66,11 @@ const PropertyDetails = () => {
         fetchData();
     }, [id]);
 
-    // 2. Hitung Tanggal Check-Out
-    const getCheckOutDate = () => {
-        const date = new Date(checkIn);
-        if (durationType === 'daily') date.setDate(date.getDate() + duration);
-        if (durationType === 'weekly') date.setDate(date.getDate() + (duration * 7));
-        if (durationType === 'monthly') date.setMonth(date.getMonth() + duration);
-        return date.toISOString().split('T')[0];
-    };
-
-    // 3. LOGIC BARU: Cek Stok Real-time ke Backend
+    // 2. LOGIC BARU: Cek Stok Real-time ke Backend
     const checkAllRoomsAvailability = async () => {
         if (!property?.room_types) return;
 
         setIsCheckingStock(true);
-        const calculatedCheckOut = getCheckOutDate();
         const newStocks: Record<string, number> = {};
 
         // Cek availability untuk setiap kamar secara parallel
@@ -65,7 +80,7 @@ const PropertyDetails = () => {
                     params: {
                         room_type_id: r.id,
                         check_in: checkIn,
-                        check_out: calculatedCheckOut
+                        check_out: checkOut
                     }
                 });
                 newStocks[r.id] = res.data.available;
@@ -79,39 +94,33 @@ const PropertyDetails = () => {
         setIsCheckingStock(false);
     };
 
-    // 4. Trigger Cek Stok saat Tanggal/Durasi Berubah
+    // 3. Trigger Cek Stok saat Tanggal Berubah ATAU saat properti pertama kali di-load
     useEffect(() => {
         if (property && property.room_types && property.room_types.length > 0) {
             checkAllRoomsAvailability();
         }
-    }, [checkIn, duration, durationType, property]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [checkIn, checkOut, property]);
 
-    // 5. Hitung Harga Per Kamar (Dinamis)
+    // 4. Hitung Harga Per Kamar berdasarkan total malam
     const calculateRoomPrice = (room: any) => {
-        let price = Number(room.price_daily) || Number(room.base_price);
-
-        if (durationType === 'weekly') {
-            price = Number(room.price_weekly) || (price * 7);
-        } else if (durationType === 'monthly') {
-            price = Number(room.price_monthly) || (price * 30);
-        }
-
-        return price * duration;
+        const basePrice = Number(room.price_daily) || Number(room.base_price) || 0;
+        return basePrice * totalNights;
     };
 
     const formatRupiah = (n: number) =>
         new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n);
 
-    // 6. Handle Booking (Kirim data kamar yang dipilih)
+    // 5. Handle Booking (Kirim data kamar yang dipilih)
     const handleBooking = (selectedRoom: any) => {
         navigate('/booking', {
             state: {
                 room: selectedRoom,
                 propertyName: property.name,
                 preSelectedCheckIn: checkIn,
-                preSelectedCheckOut: getCheckOutDate(),
+                preSelectedCheckOut: checkOut,
                 totalPriceOverride: calculateRoomPrice(selectedRoom),
-                durationType,
+                totalNights: totalNights,
             },
         });
     };
@@ -129,8 +138,6 @@ const PropertyDetails = () => {
         if (f.includes('hot') || f.includes('water') || f.includes('shower')) return <Droplets size={18} className="text-gray-500 shrink-0" />;
         return <CheckCircle size={18} className="text-gray-400 shrink-0" />;
     };
-
-    const durationLabel = durationType === 'daily' ? 'Malam' : durationType === 'weekly' ? 'Minggu' : 'Bulan';
 
     if (loading) return (
         <div className="h-screen flex items-center justify-center bg-[#FEFBF3]">
@@ -209,82 +216,51 @@ const PropertyDetails = () => {
                 </p>
             </div>
 
-            {/* --- SEARCH BAR --- */}
+            {/* --- SEARCH BAR (SYNCED & CENTERED) --- */}
             <div className="bg-[#F5E6C8] py-10">
-                <div className="container mx-auto max-w-7xl px-6">
-                    <div className="bg-white flex flex-col md:flex-row overflow-hidden max-w-4xl mx-auto shadow-sm">
+                <div className="container mx-auto max-w-7xl px-6 flex justify-center">
+                    <div className="bg-white flex flex-col md:flex-row overflow-hidden w-full max-w-4xl shadow-sm rounded-lg border-t-4 border-keenan-gold">
 
                         {/* Check In */}
-                        <div className="flex-1 px-6 py-4 border-b md:border-b-0 md:border-r border-gray-200">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Check-In</p>
+                        <div className="flex-1 px-8 py-6 border-b md:border-b-0 md:border-r border-gray-200">
+                            <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Check-In</p>
                             <input
                                 type="date"
                                 value={checkIn}
                                 min={today}
-                                onChange={e => setCheckIn(e.target.value)}
-                                className="text-sm font-medium text-gray-800 outline-none bg-transparent w-full cursor-pointer"
+                                onChange={(e) => {
+                                    setCheckIn(e.target.value);
+                                    // Cegah Check-Out berada di sebelum Check-In yang baru
+                                    if (e.target.value >= checkOut) {
+                                        setCheckOut(getNextDay(e.target.value));
+                                    }
+                                }}
+                                className="text-lg font-serif text-gray-800 outline-none bg-transparent w-full cursor-pointer"
                             />
                         </div>
 
-                        {/* Tipe Durasi */}
-                        <div className="flex-1 px-6 py-4 border-b md:border-b-0 md:border-r border-gray-200">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Tipe Durasi</p>
-                            <div className="flex gap-1">
-                                {(['daily', 'weekly', 'monthly'] as const).map((type) => (
-                                    <button
-                                        key={type}
-                                        onClick={() => { setDurationType(type); setDuration(1); }}
-                                        className={`flex-1 py-1 text-[10px] font-bold uppercase rounded transition-all border ${durationType === type
-                                                ? 'bg-keenan-gold text-white border-keenan-gold'
-                                                : 'text-gray-400 border-gray-200 hover:border-gray-300'
-                                            }`}
-                                    >
-                                        {type === 'daily' ? 'Harian' : type === 'weekly' ? 'Mingguan' : 'Bulanan'}
-                                    </button>
-                                ))}
-                            </div>
+                        {/* Check Out */}
+                        <div className="flex-1 px-8 py-6">
+                            <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Check-Out</p>
+                            <input
+                                type="date"
+                                value={checkOut}
+                                min={getNextDay(checkIn)}
+                                onChange={e => setCheckOut(e.target.value)}
+                                className="text-lg font-serif text-gray-800 outline-none bg-transparent w-full cursor-pointer"
+                            />
                         </div>
 
-                        {/* Jumlah Durasi */}
-                        <div className="flex-1 px-6 py-4 border-b md:border-b-0 md:border-r border-gray-200">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
-                                Jumlah {durationLabel}
-                            </p>
-                            <div className="flex items-center gap-3">
-                                <button
-                                    onClick={() => setDuration(Math.max(1, duration - 1))}
-                                    className="w-7 h-7 rounded bg-gray-100 font-bold text-sm hover:bg-gray-200 transition-colors flex items-center justify-center leading-none"
-                                >−</button>
-                                <span className="font-bold text-gray-800 text-sm w-4 text-center">{duration}</span>
-                                <button
-                                    onClick={() => setDuration(duration + 1)}
-                                    className="w-7 h-7 rounded bg-gray-100 font-bold text-sm hover:bg-gray-200 transition-colors flex items-center justify-center leading-none"
-                                >+</button>
-                            </div>
-                        </div>
-
-                        {/* Check Out (readonly) */}
-                        <div className="flex-1 px-6 py-4 border-b md:border-b-0 md:border-r border-gray-200">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Check-Out</p>
-                            <p className="text-sm font-medium text-gray-800">
-                                {new Date(getCheckOutDate()).toLocaleDateString('id-ID', { dateStyle: 'medium' })}
-                            </p>
-                        </div>
-
-                        {/* Button Visual */}
-                        <div className="bg-keenan-gold px-8 py-4 flex items-center justify-center text-white font-bold uppercase text-xs tracking-widest">
-                            UPDATING...
-                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* --- ROOM & RATES (LOGIC REAL-TIME TERAPKAN DISINI) --- */}
+            {/* --- ROOM & RATES --- */}
             <div className="bg-[#FEFBF3] py-12">
                 <div className="container mx-auto max-w-7xl px-6">
                     <h2 className="text-2xl font-serif font-bold text-gray-900 mb-1">Room &amp; Rates</h2>
                     <p className="text-gray-400 text-sm mb-8">
-                        {isCheckingStock ? "Sedang mengecek ketersediaan..." : "Pilih kamar yang tersedia"}
+                        {isCheckingStock ? "Sedang mengecek ketersediaan..." : "Pilih kamar yang tersedia untuk tanggal yang Anda tentukan"}
                     </p>
 
                     <div className="space-y-6">
@@ -370,7 +346,7 @@ const PropertyDetails = () => {
                                     <div className="shrink-0 p-6 flex flex-col items-end justify-between border-t md:border-t-0 md:border-l border-gray-100 md:min-w-[200px]">
                                         <div className="text-right">
                                             <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider mb-1">
-                                                Total {duration} {durationLabel}
+                                                Total {totalNights} Malam
                                             </p>
                                             <p className="text-2xl font-bold font-serif text-gray-900">
                                                 {formatRupiah(calculateRoomPrice(room))}
