@@ -1,346 +1,352 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Invoice #{{ $booking->booking_code }}</title>
+
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        /* ===============================
+           PAGE SETUP (PRINT FRIENDLY)
+        =============================== */
+        @page {
+            size: A4 portrait;
+            margin: 60px 60px;
+            /* Diperbesar biar nggak mepet */
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
         body {
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
             font-size: 11px;
-            color: #1a1a1a;
+            color: #1f2937;
             background: #ffffff;
             line-height: 1.5;
+            padding: 20px 30px;
+            /* Tambahan padding kiri kanan */
         }
 
-        /* ---- STRIPE ATAS ---- */
-        .stripe-top {
-            background-color: #1a1a1a;
-            height: 8px;
-            width: 100%;
+        /* CONTAINER AGAR TIDAK FULL LEBAR */
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
         }
 
-        /* ---- WRAPPER ---- */
-        .wrapper {
-            padding: 32px 40px 28px 40px;
-        }
-
-        /* ---- HEADER ---- */
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            border-bottom: 2px solid #e2e8f0;
-            padding-bottom: 20px;
-            margin-bottom: 24px;
-        }
-        .header-left h1 {
-            font-size: 28px;
-            font-weight: 900;
-            color: #1a1a1a;
-            letter-spacing: -0.5px;
-        }
-        .header-left p {
-            font-size: 9px;
-            color: #94a3b8;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-top: 4px;
-        }
-        .header-right {
-            text-align: right;
-        }
-        .header-right .company-name {
-            font-size: 12px;
-            font-weight: 900;
-            color: #C5A059;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-        .header-right .company-address {
-            font-size: 9px;
-            color: #94a3b8;
-            margin-top: 4px;
-            max-width: 180px;
-            margin-left: auto;
-            line-height: 1.4;
-        }
-
-        /* ---- INFO TAMU ---- */
-        .info-grid {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 24px;
-        }
-        .info-block {
-            flex: 1;
-        }
-        .info-block.right {
-            text-align: right;
-        }
-        .label {
-            font-size: 8px;
-            font-weight: 900;
-            color: #94a3b8;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-bottom: 4px;
-            margin-top: 12px;
-        }
-        .label:first-child { margin-top: 0; }
-        .value-name {
-            font-size: 13px;
-            font-weight: 700;
-            color: #1a1a1a;
-        }
-        .value {
-            font-size: 11px;
-            color: #475569;
-        }
-
-        /* ---- TABEL ---- */
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 20px;
+            table-layout: fixed;
         }
-        thead tr {
-            border-bottom: 2px solid #f1f5f9;
-        }
-        th {
-            font-size: 8px;
-            font-weight: 900;
-            color: #94a3b8;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            padding: 8px 0;
-        }
-        th.left  { text-align: left; }
-        th.center { text-align: center; }
-        th.right  { text-align: right; }
-        tbody tr {
-            border-bottom: 1px solid #f8fafc;
-        }
+
         td {
-            padding: 14px 0;
             vertical-align: top;
         }
-        td.center { text-align: center; }
-        td.right  { text-align: right; }
-        .td-desc-title {
-            font-weight: 700;
-            color: #1a1a1a;
-            font-size: 12px;
-        }
-        .td-desc-sub {
-            font-size: 9px;
-            color: #94a3b8;
-            margin-top: 2px;
-        }
-        .td-period {
-            font-size: 10px;
-            color: #475569;
-            line-height: 1.6;
-        }
-        .td-period .sep { color: #cbd5e1; }
 
-        /* ---- SUBTOTAL BOX ---- */
-        .totals {
-            display: flex;
-            justify-content: flex-end;
-            margin-bottom: 20px;
-        }
-        .totals-box {
-            width: 240px;
-        }
-        .totals-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 6px 0;
-            border-bottom: 1px solid #f1f5f9;
-            font-size: 11px;
-        }
-        .totals-row .lbl { color: #64748b; }
-        .totals-row .val { font-weight: 600; color: #1a1a1a; }
-        .totals-total {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 12px;
-            background-color: #f8fafc;
-            border-radius: 6px;
-            margin-top: 6px;
-        }
-        .totals-total .lbl { font-weight: 900; font-size: 11px; color: #1a1a1a; }
-        .totals-total .val { font-weight: 900; font-size: 13px; color: #C5A059; }
-
-        /* ---- STATUS BADGE ---- */
-        .badge {
-            display: inline-block;
-            background-color: #f0fdf4;
-            border: 1px solid #bbf7d0;
-            color: #15803d;
-            font-size: 9px;
-            font-weight: 900;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            padding: 5px 14px;
-            border-radius: 999px;
-            margin-bottom: 24px;
-        }
-        .badge-dot {
-            display: inline-block;
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background-color: #22c55e;
-            margin-right: 5px;
-            vertical-align: middle;
+        /* COLORS */
+        .text-gold {
+            color: #C5A059;
         }
 
-        /* ---- FOOTER ---- */
-        .footer {
-            border-top: 1px solid #f1f5f9;
-            padding-top: 18px;
+        .text-dark {
+            color: #111827;
+        }
+
+        .text-gray {
+            color: #6b7280;
+        }
+
+        .text-light-gray {
+            color: #9ca3af;
+        }
+
+        .font-bold {
+            font-weight: bold;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .text-center {
             text-align: center;
         }
-        .footer-title {
-            font-size: 16px;
-            font-style: italic;
-            color: #cbd5e1;
-            margin-bottom: 6px;
-            font-family: Georgia, serif;
-        }
-        .footer-text {
-            font-size: 8px;
-            color: #94a3b8;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            line-height: 1.8;
+
+        /* HEADER */
+        .header-container {
+            border-bottom: 2px solid #111827;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
         }
 
-        /* ---- STRIPE BAWAH ---- */
-        .stripe-bottom {
-            background-color: #C5A059;
-            height: 5px;
-            width: 100%;
-            margin-top: 28px;
+        .header-title {
+            font-size: 24px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .header-subtitle {
+            font-size: 10px;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+
+        .header-booking-label {
+            font-size: 9px;
+            font-weight: bold;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .header-booking-code {
+            font-size: 22px;
+            font-family: monospace;
+            font-weight: bold;
+            color: #C5A059;
+        }
+
+        /* CARD */
+        .card {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 18px;
+            page-break-inside: avoid;
+        }
+
+        .card-header {
+            background-color: #f9fafb;
+            padding: 10px 14px;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #6b7280;
+        }
+
+        .card-body {
+            padding: 14px;
+        }
+
+        /* BADGE */
+        .badge-paid {
+            background-color: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 9px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: inline-block;
+        }
+
+        .label {
+            font-size: 9px;
+            color: #9ca3af;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        .value {
+            font-size: 12px;
+            font-weight: bold;
+            color: #1f2937;
+        }
+
+        .inner-box {
+            border: 1px solid #e5e7eb;
+            padding: 12px;
+            border-radius: 8px;
         }
     </style>
 </head>
+
 <body>
 
-    <div class="stripe-top"></div>
+    <div class="container">
 
-    <div class="wrapper">
-
-        {{-- HEADER --}}
-        <div class="header">
-            <div class="header-left">
-                <h1>INVOICE</h1>
-                <p>#{{ $booking->booking_code }}</p>
-            </div>
-            <div class="header-right">
-                <div class="company-name">KEENAN LIVING</div>
-                <div class="company-address">{{ $booking->property->address ?? 'Yogyakarta, Indonesia' }}</div>
-            </div>
-        </div>
-
-        {{-- INFO TAMU & TANGGAL --}}
-        <div class="info-grid">
-            <div class="info-block">
-                <div class="label">Billed To</div>
-                <div class="value-name">{{ $booking->customer_name }}</div>
-                <div class="value">{{ $booking->customer_email }}</div>
-                <div class="value">{{ $booking->customer_phone }}</div>
-            </div>
-            <div class="info-block right">
-                <div class="label">Booking Date</div>
-                <div class="value">{{ \Carbon\Carbon::parse($booking->created_at)->translatedFormat('d F Y') }}</div>
-
-                <div class="label">Payment Method</div>
-                <div class="value" style="font-weight:700; text-transform:uppercase;">
-                    {{ $booking->payment_method ?? 'Virtual Account' }}
-                </div>
-
-                <div class="label">Status</div>
-                <div class="value" style="font-weight:700; text-transform:uppercase; color:#15803d;">
-                    LUNAS / PAID
-                </div>
-            </div>
-        </div>
-
-        {{-- TABEL ITEM --}}
-        <table>
-            <thead>
-                <tr>
-                    <th class="left">Description</th>
-                    <th class="left">Period</th>
-                    <th class="center">Nights</th>
-                    <th class="right">Amount</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>
-                        <div class="td-desc-title">{{ $booking->property->name ?? '-' }}</div>
-                        <div class="td-desc-sub">{{ $booking->roomType->name ?? ($booking->room_type->name ?? '-') }}</div>
-                    </td>
-                    <td>
-                        <div class="td-period">
-                            {{ \Carbon\Carbon::parse($booking->check_in_date)->format('d/m/Y') }}<br>
-                            <span class="sep">—</span><br>
-                            {{ \Carbon\Carbon::parse($booking->check_out_date)->format('d/m/Y') }}
-                        </div>
-                    </td>
-                    <td class="center" style="font-weight:600;">{{ $nights }}</td>
-                    <td class="right" style="font-weight:700;">{{ $formatted_price }}</td>
-                </tr>
-            </tbody>
+        <!-- HEADER -->
+        <table class="header-container">
+            <tr>
+                <td width="60%">
+                    <div class="header-title">INVOICE</div>
+                    <div class="header-subtitle">
+                        Rincian pesanan Anda. Simpan dokumen ini sebagai bukti.
+                    </div>
+                    <div style="margin-top: 10px; font-weight: bold; font-size: 11px;">
+                        <span class="text-gold">
+                            {{ $booking->property->name ?? 'Keenan Living' }}
+                        </span> • Yogyakarta, Indonesia
+                    </div>
+                </td>
+                <td width="40%" class="text-right">
+                    <div class="header-booking-label">Booking Code</div>
+                    <div class="header-booking-code">
+                        {{ $booking->booking_code }}
+                    </div>
+                </td>
+            </tr>
         </table>
 
-        {{-- SUBTOTAL & TOTAL --}}
-        <div class="totals">
-            <div class="totals-box">
-                <div class="totals-row">
-                    <span class="lbl">Subtotal</span>
-                    <span class="val">{{ $formatted_price }}</span>
-                </div>
-                <div class="totals-row">
-                    <span class="lbl">Tax & Service</span>
-                    <span class="val">Included</span>
-                </div>
-                <div class="totals-total">
-                    <span class="lbl">TOTAL PAID</span>
-                    <span class="val">{{ $formatted_price }}</span>
-                </div>
+        <!-- INFORMASI PEMESAN -->
+        <div class="card">
+            <div class="card-header">
+                <table>
+                    <tr>
+                        <td>Informasi Pemesan</td>
+                        <td class="text-right">
+                            <span class="badge-paid">Paid</span>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+            <div class="card-body">
+                <table>
+                    <tr>
+                        <td width="33%">
+                            <div class="label">Nama Tamu</div>
+                            <div class="value">{{ $booking->customer_name }}</div>
+                        </td>
+                        <td width="33%">
+                            <div class="label">Nomor WhatsApp</div>
+                            <div class="value">{{ $booking->customer_phone }}</div>
+                        </td>
+                        <td width="34%">
+                            <div class="label">Email</div>
+                            <div class="value">{{ $booking->customer_email }}</div>
+                        </td>
+                    </tr>
+                </table>
             </div>
         </div>
 
-        {{-- STATUS BADGE --}}
-        <div>
-            <span class="badge">
-                <span class="badge-dot"></span>
-                LUNAS / PAID
-            </span>
+        <!-- WAKTU MENGINAP -->
+        <div class="card">
+            <div class="card-header">Informasi Waktu Menginap</div>
+            <div class="card-body">
+                <table>
+                    <tr>
+                        <td width="48%">
+                            <div class="inner-box">
+                                <div class="label">Check-In</div>
+                                <div class="value">
+                                    {{ \Carbon\Carbon::parse($booking->check_in_date)->translatedFormat('l, d F Y') }}
+                                </div>
+                                <div style="font-size: 10px; color: #6b7280; margin-top: 4px;">
+                                    14:00 WIB
+                                </div>
+                            </div>
+                        </td>
+                        <td width="4%"></td>
+                        <td width="48%">
+                            <div class="inner-box">
+                                <div class="label">Check-Out</div>
+                                <div class="value">
+                                    {{ \Carbon\Carbon::parse($booking->check_out_date)->translatedFormat('l, d F Y') }}
+                                </div>
+                                <div style="font-size: 10px; color: #6b7280; margin-top: 4px;">
+                                    12:00 WIB
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+            </div>
         </div>
 
-        {{-- FOOTER --}}
-        <div class="footer">
-            <div class="footer-title">Thank You!</div>
-            <div class="footer-text">
-                Dokumen ini diterbitkan secara otomatis oleh sistem dan sah tanpa tanda tangan basah.<br>
-                Keenan Living Management System &copy; {{ date('Y') }}
+        <!-- DETAIL KAMAR -->
+        <div class="card">
+            <div class="card-header">Detail Kamar</div>
+            <div class="card-body">
+
+                <div style="font-size: 16px; font-weight: bold;">
+                    {{ $booking->roomType->name ?? 'Kamar Hotel' }}
+                </div>
+
+                <div style="font-size: 11px; color: #6b7280; margin: 4px 0 14px;">
+                    {{ $nights ?? 1 }} Malam • 1 Kamar
+                </div>
+
+                <table>
+                    <tr>
+                        <td width="48%">
+                            <div class="inner-box">
+                                <div class="label">Hotel</div>
+                                <div class="value">
+                                    {{ $booking->property->name ?? 'Keenan Living Hotel' }}
+                                </div>
+                            </div>
+                        </td>
+                        <td width="4%"></td>
+                        <td width="48%">
+                            <div class="inner-box">
+                                <div class="label">Lokasi</div>
+                                <div class="value">Yogyakarta</div>
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+
+            </div>
+        </div>
+
+        <!-- PEMBAYARAN -->
+        <div class="card">
+            <div class="card-header">Rincian Pembayaran</div>
+            <div class="card-body">
+
+                <table style="margin-bottom: 14px;">
+                    <tr>
+                        <td style="color: #6b7280;">Metode Bayar</td>
+                        <td class="text-right font-bold">
+                            {{ str_replace('_', ' ', $booking->payment_method ?? 'Bank Transfer') }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="color: #6b7280; padding-top: 6px;">Status</td>
+                        <td class="text-right">
+                            <span class="badge-paid">LUNAS</span>
+                        </td>
+                    </tr>
+                </table>
+
+                <table style="border-top: 2px solid #111827; padding-top: 12px;">
+                    <tr>
+                        <td style="font-weight: bold; color: #4b5563;">Total Bayar</td>
+                        <td class="text-right text-gold" style="font-size: 18px; font-weight: bold;">
+                            {{ $formatted_price ?? 'Rp ' . number_format($booking->total_price ?? 0, 0, ',', '.') }}
+                        </td>
+                    </tr>
+                </table>
+
+            </div>
+
+            <div style="
+            background-color: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+            padding: 12px;
+            text-align: center;
+            font-size: 9px;
+            color: #9ca3af;
+            border-bottom-left-radius: 8px;
+            border-bottom-right-radius: 8px;">
+
+                Dokumen ini sah dan diterbitkan oleh sistem pada
+                {{ \Carbon\Carbon::parse($booking->created_at)->translatedFormat('d F Y') }}.
+                <br>
+                Tunjukkan Booking Code saat Check-in di resepsionis.
             </div>
         </div>
 
     </div>
-
-    <div class="stripe-bottom"></div>
-
 </body>
+
 </html>

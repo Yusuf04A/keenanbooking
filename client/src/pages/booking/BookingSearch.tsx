@@ -87,7 +87,6 @@ export default function BookingSearch() {
                         View All Properties
                     </button>
                 </div>
-
                 {/* --- SEARCH BAR (Mobile: bawah Hero, Desktop: Floating) --- */}
                 <div id="search-bar" className="absolute bottom-0 md:-bottom-16 left-0 right-0 px-4 z-40">
                     <div className="bg-white p-4 md:p-6 shadow-2xl flex flex-col md:flex-row gap-3 md:gap-4 items-stretch md:items-end justify-between max-w-6xl mx-auto rounded-lg md:rounded-sm border-t-4 border-keenan-gold">
@@ -255,6 +254,7 @@ export default function BookingSearch() {
                 </div>
             </footer>
 
-        </div>
+
+        </div >
     );
 }
