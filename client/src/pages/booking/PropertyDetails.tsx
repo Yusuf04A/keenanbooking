@@ -23,7 +23,7 @@ const InteractiveMap = ({ address, propertyName }: { address: string; propertyNa
                 title={propertyName}
             />
             <a
-                href={`https://maps.google.com/maps/search/${encodeURIComponent(address)}`}
+                href={`https://maps.google.com/maps?q=${encodeURIComponent(address)}`}
                 target="_blank" rel="noopener noreferrer"
                 className="absolute bottom-3 right-3 z-10 bg-white text-gray-700 px-4 py-2 rounded-full text-xs font-bold shadow-lg flex items-center gap-1.5 hover:bg-gray-50 border border-gray-100"
             >
@@ -315,7 +315,7 @@ const PropertyDetails = () => {
             {/* --- ROOM & RATES --- */}
             <div className="bg-[#FEFBF3] py-12">
                 <div className="container mx-auto max-w-7xl px-6">
-                    <h2 className="text-2xl font-serif font-bold text-gray-900 mb-1">Room &amp; Rates</h2>
+                    <h2 className="text-2xl font-serif font-bold text-gray-900 mb-1">Room & Rates</h2>
                     <p className="text-gray-400 text-sm mb-8">
                         {isCheckingStock ? "Sedang mengecek ketersediaan..." : "Pilih kamar yang tersedia untuk tanggal yang Anda tentukan"}
                     </p>
@@ -356,7 +356,7 @@ const PropertyDetails = () => {
                                             <div className="flex items-start justify-between mb-1">
                                                 <h3 className="text-xl font-serif font-bold text-gray-900">{room.name}</h3>
 
-                                                {/* BADGE STOK DINAMIS */}
+                                                {/* BADGE STOK DINAMIS UPDATE */}
                                                 {!isCheckingStock && (
                                                     isSoldOut ? (
                                                         <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded font-bold uppercase tracking-wide ml-3">
@@ -364,7 +364,7 @@ const PropertyDetails = () => {
                                                         </span>
                                                     ) : (
                                                         <span className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wide ml-3 whitespace-nowrap ${currentStock <= 3 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}`}>
-                                                            {currentStock <= 3 ? `🔥 Sisa ${currentStock} Unit` : `✅ Tersedia`}
+                                                            {currentStock <= 3 ? `🔥 Sisa ${currentStock} Unit` : `✅ ${currentStock} Unit Tersedia`}
                                                         </span>
                                                     )
                                                 )}
