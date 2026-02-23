@@ -473,7 +473,7 @@ export default function SuperAdminDashboard() {
     return (
         <div className="min-h-screen bg-[#F8FAFC] flex font-sans text-gray-800">
             {/* SIDEBAR */}
-            <div className="w-64 bg-keenan-dark border-r border-gray-100 p-6 hidden md:flex flex-col fixed h-full z-10">
+            <div className="w-64 bg-keenan-dark border-r border-gray-100 p-6 hidden md:flex flex-col fixed h-full z-10 print:hidden">
                 <div className="mb-10 text-center">
                     <div className="w-16 h-16 bg-keenan-gold rounded-full flex items-center justify-center mx-auto mb-3 text-keenan-dark"><ShieldCheck size={32} /></div>
                     <h2 className="text-xl font-black text-white tracking-tight">SuperAdmin</h2>
@@ -495,7 +495,7 @@ export default function SuperAdminDashboard() {
             </div>
 
             {/* MAIN CONTENT */}
-            <div className="flex-1 md:ml-64 p-6 lg:p-8 overflow-x-hidden">
+            <div className="flex-1 md:ml-64 p-6 lg:p-8 overflow-x-hidden print:hidden">
 
                 {/* Header (Filter & Profile) */}
                 <div className="flex flex-col sm:flex-row justify-between items-end sm:items-center mb-8 gap-4">
@@ -769,14 +769,14 @@ export default function SuperAdminDashboard() {
 
             {/* --- MODAL GLOBAL --- */}
             {isModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in zoom-in duration-200">
-                    <div className={`w-full ${getModalSize()} rounded-3xl p-0 max-h-[90vh] overflow-y-auto shadow-2xl relative transition-all duration-300 flex flex-col md:flex-row`}>
-                        <button onClick={closeModal} className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-full transition-all text-gray-600"><X size={16} /></button>
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in zoom-in duration-200 print:static print:bg-white print:p-0 print:block print:z-auto">
+                    <div className={`w-full ${getModalSize()} rounded-3xl p-0 max-h-[90vh] overflow-y-auto shadow-2xl relative transition-all duration-300 flex flex-col md:flex-row print:max-w-full print:w-full print:max-h-none print:shadow-none print:rounded-none print:overflow-visible print:block`}>
+                        <button onClick={closeModal} className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-full transition-all text-gray-600 print:hidden"><X size={16} /></button>
 
                         {/* CASE 1: BOOKING DETAIL (SPLIT VIEW) */}
                         {modalType === 'booking_detail' && formData && (
                             <>
-                                <div className="w-full md:w-[35%] bg-gray-50 p-8 border-r border-gray-100 overflow-y-auto">
+                                <div className="w-full md:w-[35%] bg-gray-50 p-8 border-r border-gray-100 overflow-y-auto print:w-full print:p-0 print:bg-white print:border-none print:mb-6 print:overflow-visible">
                                     <div className="mb-6 text-center">
                                         <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl font-serif font-bold">{formData.customer_name?.charAt(0)}</div>
                                         <h3 className="text-xl font-bold text-gray-900">{formData.customer_name}</h3>
@@ -796,7 +796,7 @@ export default function SuperAdminDashboard() {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="w-full md:w-[65%] p-8 overflow-y-auto flex flex-col">
+                                <div className="w-full md:w-[65%] p-8 overflow-y-auto flex flex-col print:w-full print:p-0 print:overflow-visible">
                                     <div className="flex justify-between items-start mb-8 pb-6 border-b border-gray-100">
                                         <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em]">Booking ID</p><h2 className="text-2xl font-mono font-bold text-gray-900">#{formData.booking_code}</h2><p className="text-xs text-gray-400 mt-1">{new Date(formData.created_at).toLocaleString('en-US')}</p></div>
                                     </div>
@@ -812,7 +812,7 @@ export default function SuperAdminDashboard() {
                                         </div>
                                         <div className="border-t border-gray-200 pt-4 flex justify-between items-center"><div className="flex items-center gap-2 text-sm font-semibold text-gray-500"><CreditCard size={16} /> Total Paid</div><div className="text-2xl font-black text-gray-900">{formatRupiah(formData.total_price)}</div></div>
                                     </div>
-                                    <div className="mt-auto flex gap-3">
+                                    <div className="mt-auto flex gap-3 print:hidden">
                                         {formData.status !== 'cancelled' && (<button onClick={() => window.print()} className="w-full bg-white border border-gray-200 py-3.5 rounded-xl font-bold text-gray-600 hover:bg-gray-50 flex items-center justify-center gap-2 transition-all"><Printer size={18} /> Print Details</button>)}
                                     </div>
                                 </div>
