@@ -9,7 +9,7 @@ use App\Models\RoomType;
 use App\Models\Admin;
 use Illuminate\Support\Str;
 use App\Models\BookingPlatform;
-use Illuminate\Support\Facades\Storage; // <--- WAJIB UNTUK DELETE & UPLOAD FILE
+use Illuminate\Support\Facades\Storage;
 
 class AdminController extends Controller
 {
@@ -25,17 +25,13 @@ class AdminController extends Controller
         ]);
 
         $data['slug'] = Str::slug($data['name']);
-
-        // Default Image (gambar utama)
         $data['image_url'] = 'https://images.unsplash.com/photo-1566073771259-6a8506099945';
 
-        // Jika ada file gambar utama yang di-upload
         if ($request->hasFile('image')) {
             $path = $request->file('image')->store('properties', 'public');
             $data['image_url'] = asset('storage/' . $path);
         }
 
-        // Upload gallery images (multiple)
         $galleryUrls = [];
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $imgFile) {
@@ -43,7 +39,9 @@ class AdminController extends Controller
                 $galleryUrls[] = asset('storage/' . $path);
             }
         }
-        $data['gallery_images'] = !empty($galleryUrls) ? $galleryUrls : null;
+        
+        // Paksa ke JSON string agar tidak error "Array to string conversion"
+        $data['gallery_images'] = !empty($galleryUrls) ? json_encode($galleryUrls) : null;
 
         $prop = Property::create($data);
         return response()->json($prop);
@@ -64,7 +62,6 @@ class AdminController extends Controller
 
         $data['slug'] = Str::slug($data['name']);
 
-        // Handle gambar utama (image_url)
         if ($request->hasFile('image')) {
             if ($prop->image_url && str_contains($prop->image_url, 'storage/properties/')) {
                 $oldPath = str_replace(asset('storage/'), '', $prop->image_url);
@@ -74,8 +71,9 @@ class AdminController extends Controller
             $data['image_url'] = asset('storage/' . $path);
         }
 
-        // Handle penghapusan satu gambar gallery
-        $currentGallery = $prop->gallery_images ?? [];
+        // Handle gallery yang sudah ada (pastikan jadi array dulu)
+        $currentGallery = is_string($prop->gallery_images) ? json_decode($prop->gallery_images, true) : ($prop->gallery_images ?? []);
+        
         if ($request->has('remove_gallery_index')) {
             $idx = (int)$request->remove_gallery_index;
             if (isset($currentGallery[$idx])) {
@@ -88,14 +86,15 @@ class AdminController extends Controller
             }
         }
 
-        // Upload gallery images baru (tambahkan ke gallery yang ada)
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $imgFile) {
                 $path = $imgFile->store('properties/gallery', 'public');
                 $currentGallery[] = asset('storage/' . $path);
             }
         }
-        $data['gallery_images'] = !empty($currentGallery) ? $currentGallery : null;
+        
+        // Simpan kembali sebagai JSON String
+        $data['gallery_images'] = !empty($currentGallery) ? json_encode($currentGallery) : null;
 
         $prop->update($data);
         return response()->json($prop);
@@ -104,23 +103,20 @@ class AdminController extends Controller
     public function destroyProperty($id)
     {
         $prop = Property::findOrFail($id);
-
-        // Hapus gambar utama dari storage
         if ($prop->image_url && str_contains($prop->image_url, 'storage/properties/')) {
             $oldPath = str_replace(asset('storage/'), '', $prop->image_url);
             Storage::disk('public')->delete($oldPath);
         }
-
-        // Hapus semua gambar gallery dari storage
-        if (!empty($prop->gallery_images)) {
-            foreach ($prop->gallery_images as $galleryUrl) {
+        
+        $gallery = is_string($prop->gallery_images) ? json_decode($prop->gallery_images, true) : $prop->gallery_images;
+        if (!empty($gallery)) {
+            foreach ($gallery as $galleryUrl) {
                 if (str_contains($galleryUrl, 'storage/properties/')) {
                     $oldPath = str_replace(asset('storage/'), '', $galleryUrl);
                     Storage::disk('public')->delete($oldPath);
                 }
             }
         }
-
         $prop->delete();
         return response()->json(['message' => 'Deleted']);
     }
@@ -128,27 +124,50 @@ class AdminController extends Controller
     // ================= ROOMS (KAMAR) =================
     public function storeRoom(Request $request)
     {
-        $data = $request->validate([
+        $request->validate([
             'property_id' => 'required',
             'name' => 'required',
-            'price_daily' => 'required|numeric',
-            'price_weekly' => 'nullable|numeric',
-            'price_monthly' => 'nullable|numeric',
+            'rental_category' => 'required|string',
             'capacity' => 'required|numeric',
             'total_stock' => 'required|numeric',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:3072',
-            'facilities' => 'nullable|array'
         ]);
 
-        // Default Image
-        $data['image_url'] = 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304';
+        $room = new RoomType();
+        $room->property_id = $request->property_id;
+        $room->name = $request->name;
+        $room->rental_category = $request->rental_category;
+        
+        // Otomatisasi enum lama agar db tidak error
+        $room->room_category = $request->rental_category === 'bulanan' ? 'monthly' : 'daily';
+        
+        // Simpan harga, default ke 0 jika kosong
+        $room->price_daily = $request->price_daily ?: 0;
+        $room->price_weekly = $request->price_weekly ?: 0;
+        $room->price_monthly = $request->price_monthly ?: 0;
+        
+        $room->capacity = $request->capacity;
+        $room->total_stock = $request->total_stock;
 
-        if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('rooms', 'public');
-            $data['image_url'] = asset('storage/' . $path);
+        // INI KUNCI SOLUSINYA: Gunakan json_encode untuk mengubah Array ke String!
+        $room->facilities = $request->facilities ? json_encode($request->facilities) : json_encode([]);
+
+        if ($request->filled('room_numbers')) {
+            // Frontend mengirim string JSON, kita pastikan formatnya benar
+            $decoded = json_decode($request->room_numbers, true);
+            $room->room_numbers = json_encode($decoded ?: []);
+        } else {
+            $room->room_numbers = json_encode([]);
         }
 
-        $room = RoomType::create($data);
+        // Upload gambar kamar
+        if ($request->hasFile('image')) {
+            $path = $request->file('image')->store('rooms', 'public');
+            $room->image_url = asset('storage/' . $path);
+        } else {
+            $room->image_url = 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304';
+        }
+
+        $room->save();
         return response()->json($room);
     }
 
@@ -156,43 +175,56 @@ class AdminController extends Controller
     {
         $room = RoomType::findOrFail($id);
 
-        $data = $request->validate([
+        $request->validate([
             'property_id' => 'required',
             'name' => 'required',
-            'price_daily' => 'required|numeric',
-            'price_weekly' => 'nullable|numeric',
-            'price_monthly' => 'nullable|numeric',
+            'rental_category' => 'required|string',
             'capacity' => 'required|numeric',
             'total_stock' => 'required|numeric',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:3072',
-            'facilities' => 'nullable|array'
         ]);
 
+        $room->property_id = $request->property_id;
+        $room->name = $request->name;
+        $room->rental_category = $request->rental_category;
+        $room->room_category = $request->rental_category === 'bulanan' ? 'monthly' : 'daily';
+        
+        $room->price_daily = $request->price_daily ?: 0;
+        $room->price_weekly = $request->price_weekly ?: 0;
+        $room->price_monthly = $request->price_monthly ?: 0;
+        
+        $room->capacity = $request->capacity;
+        $room->total_stock = $request->total_stock;
+        
+        // PAKSA JADI STRING JSON
+        $room->facilities = $request->facilities ? json_encode($request->facilities) : json_encode([]);
+
+        if ($request->filled('room_numbers')) {
+            $decoded = json_decode($request->room_numbers, true);
+            $room->room_numbers = json_encode($decoded ?: []);
+        } else {
+            $room->room_numbers = json_encode([]);
+        }
+
         if ($request->hasFile('image')) {
-            // Hapus gambar lama
             if ($room->image_url && str_contains($room->image_url, 'storage/rooms/')) {
                 $oldPath = str_replace(asset('storage/'), '', $room->image_url);
                 Storage::disk('public')->delete($oldPath);
             }
-
-            // Upload gambar baru
             $path = $request->file('image')->store('rooms', 'public');
-            $data['image_url'] = asset('storage/' . $path);
+            $room->image_url = asset('storage/' . $path);
         }
 
-        $room->update($data);
+        $room->save();
         return response()->json($room);
     }
 
     public function destroyRoom($id)
     {
         $room = RoomType::findOrFail($id);
-
         if ($room->image_url && str_contains($room->image_url, 'storage/rooms/')) {
             $oldPath = str_replace(asset('storage/'), '', $room->image_url);
             Storage::disk('public')->delete($oldPath);
         }
-
         $room->delete();
         return response()->json(['message' => 'Deleted']);
     }

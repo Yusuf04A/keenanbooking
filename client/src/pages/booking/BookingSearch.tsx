@@ -68,6 +68,22 @@ export default function BookingSearch() {
         return <div className={style}><ShieldCheck size={14} className="text-keenan-gold" /> {fac}</div>;
     }
 
+    // --- PENJINAK ARRAY FACILITIES (ANTI-CRASH) ---
+    const getSafeFacilities = (facilitiesData: any) => {
+        let safeFacilities: string[] = [];
+        try {
+            if (Array.isArray(facilitiesData)) {
+                safeFacilities = facilitiesData;
+            } else if (typeof facilitiesData === 'string') {
+                const parsed = JSON.parse(facilitiesData);
+                safeFacilities = typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
+            }
+        } catch (e) {
+            safeFacilities = [];
+        }
+        return Array.isArray(safeFacilities) ? safeFacilities : [];
+    };
+
     return (
         <div className="font-sans text-gray-800 bg-white">
 
@@ -119,7 +135,6 @@ export default function BookingSearch() {
 
                 {/* --- SEARCH BAR (FIXED LAYOUT) --- */}
                 <div id="search-bar" className="absolute bottom-0 left-0 right-0 px-4 translate-y-1/2 z-[60]">
-                    {/* Mengubah layout md ke lg agar lebih lega, dan memisahkan button dari guest */}
                     <div className="bg-white p-5 lg:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.2)] flex flex-col lg:flex-row gap-4 lg:gap-6 items-stretch lg:items-end justify-between max-w-6xl mx-auto rounded-lg border-t-4 border-keenan-gold">
 
                         {/* Property */}
@@ -191,38 +206,45 @@ export default function BookingSearch() {
                                 </div>
                             ))
                         ) : (
-                            properties.map((prop) => (
-                                <div key={prop.id} className="group cursor-pointer bg-white flex flex-col shadow-sm hover:shadow-xl transition-shadow duration-300 rounded-lg overflow-hidden" onClick={() => navigate(`/property/${prop.id}`)}>
-                                    <div className="h-64 overflow-hidden relative bg-gray-100">
-                                        <img
-                                            src={prop.image_url}
-                                            alt={prop.name}
-                                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                                        />
-                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-                                        <button className="absolute bottom-4 right-4 bg-white/90 p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all translate-y-4 group-hover:translate-y-0 shadow-lg">
-                                            <ArrowRight size={20} />
-                                        </button>
-                                    </div>
+                            properties.map((prop) => {
+                                // Eksekusi fungsi penjinak data fasilitas
+                                const safeFacs = prop.room_types && prop.room_types.length > 0 
+                                    ? getSafeFacilities(prop.room_types[0].facilities) 
+                                    : [];
 
-                                    <div className="p-6 flex-1 flex flex-col">
-                                        <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-2 font-bold">{prop.address?.split(',')[0]}</p>
-                                        <h3 className="text-lg font-serif font-bold text-keenan-dark mb-4 group-hover:text-keenan-gold transition-colors">{prop.name}</h3>
+                                return (
+                                    <div key={prop.id} className="group cursor-pointer bg-white flex flex-col shadow-sm hover:shadow-xl transition-shadow duration-300 rounded-lg overflow-hidden" onClick={() => navigate(`/property/${prop.id}`)}>
+                                        <div className="h-64 overflow-hidden relative bg-gray-100">
+                                            <img
+                                                src={prop.image_url}
+                                                alt={prop.name}
+                                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                            />
+                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                                            <button className="absolute bottom-4 right-4 bg-white/90 p-3 rounded-full opacity-0 group-hover:opacity-100 transition-all translate-y-4 group-hover:translate-y-0 shadow-lg">
+                                                <ArrowRight size={20} />
+                                            </button>
+                                        </div>
 
-                                        <div className="mt-auto pt-4 border-t border-gray-100 grid grid-cols-2 gap-y-2">
-                                            {prop.room_types && prop.room_types.length > 0 && prop.room_types[0].facilities ? (
-                                                prop.room_types[0].facilities.slice(0, 4).map((fac: string, idx: number) => (
-                                                    <div key={idx}>
-                                                        {getFacilityIcon(fac)}
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <span className="text-xs text-gray-400 italic col-span-2">Standard Facilities</span>
-                                            )}
+                                        <div className="p-6 flex-1 flex flex-col">
+                                            <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-2 font-bold">{prop.address?.split(',')[0]}</p>
+                                            <h3 className="text-lg font-serif font-bold text-keenan-dark mb-4 group-hover:text-keenan-gold transition-colors">{prop.name}</h3>
+
+                                            <div className="mt-auto pt-4 border-t border-gray-100 grid grid-cols-2 gap-y-2">
+                                                {safeFacs.length > 0 ? (
+                                                    safeFacs.slice(0, 4).map((fac: string, idx: number) => (
+                                                        <div key={idx}>
+                                                            {getFacilityIcon(fac)}
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-xs text-gray-400 italic col-span-2">Standard Facilities</span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
                 </div>

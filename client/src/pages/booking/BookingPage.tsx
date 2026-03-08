@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
     Loader2, User, AlertCircle, CheckCircle,
-    Wifi, Coffee, Home,
+    Wifi, Coffee, Home, Wind, Tv, MonitorPlay, Car, Utensils, Droplets,
     ArrowLeft, Mail, Phone, ChevronRight, CreditCard
 } from 'lucide-react';
 
@@ -27,6 +27,7 @@ export default function BookingPage() {
 
     // 2. State Management
     const [loading, setLoading] = useState(false);
+    const [showAllFacilities, setShowAllFacilities] = useState(false); // State baru untuk toggle fasilitas
 
     const [formData, setFormData] = useState({
         name: '', email: '', phone: '',
@@ -44,11 +45,38 @@ export default function BookingPage() {
         return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount);
     };
 
+    // --- LOGIKA PENJINAK FASILITAS DARI DATABASE ---
+    let safeFacilities: string[] = [];
+    if (room?.facilities) {
+        try {
+            if (Array.isArray(room.facilities)) safeFacilities = room.facilities;
+            else if (typeof room.facilities === 'string') {
+                const parsed = JSON.parse(room.facilities);
+                safeFacilities = typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
+            }
+        } catch (e) { safeFacilities = []; }
+    }
+    if (!Array.isArray(safeFacilities)) safeFacilities = [];
+    
+    // Batasi tampilan maksimal 3 fasilitas awal
+    const displayFacilities = safeFacilities.slice(0, 3);
+
+    // --- HELPER IKON FASILITAS ---
+    const getFacilityIcon = (facilityName: string) => {
+        const f = facilityName.toLowerCase();
+        if (f.includes('wifi') || f.includes('internet')) return <Wifi size={12} className="shrink-0" />;
+        if (f.includes('ac') || f.includes('air')) return <Wind size={12} className="shrink-0" />;
+        if (f.includes('break') || f.includes('makan')) return <Coffee size={12} className="shrink-0" />;
+        if (f.includes('tv')) return <Tv size={12} className="shrink-0" />;
+        if (f.includes('netflix')) return <MonitorPlay size={12} className="shrink-0" />;
+        if (f.includes('park')) return <Car size={12} className="shrink-0" />;
+        if (f.includes('kitchen') || f.includes('pantry') || f.includes('dapur')) return <Utensils size={12} className="shrink-0" />;
+        if (f.includes('hot') || f.includes('water') || f.includes('shower')) return <Droplets size={12} className="shrink-0" />;
+        return <CheckCircle size={12} className="shrink-0" />;
+    };
+
     // 4. Hitung Total Harga (Logic Pintar)
     const calculateTotal = () => {
-        // Jika ada override harga dari PropertyDetails (hasil hitungan durasi), pakai itu dulu
-        // Tapi cek juga kalau tanggal diganti di halaman ini, hitung ulang manual
-
         if (!formData.checkIn || !formData.checkOut) return 0;
 
         const start = new Date(formData.checkIn);
@@ -58,16 +86,10 @@ export default function BookingPage() {
 
         if (nights <= 0) return 0;
 
-        // Ambil harga dasar dari database (price_daily)
-        // Gunakan fallback ke 0 jika undefined biar gak NaN
         const dailyPrice = Number(room?.price_daily) || Number(room?.base_price) || 0;
-
-        // Logika sederhana: Kalau user ganti tanggal di sini, kita anggap harian dulu
-        // Kecuali mau kompleks implementasi ulang logika weekly/monthly di sini
         return nights * dailyPrice;
     };
 
-    // Ambil harga final: Prioritaskan override dari halaman sebelumnya jika tanggal belum berubah
     const displayTotalPrice = () => {
         if (totalPriceOverride &&
             formData.checkIn === preSelectedCheckIn &&
@@ -128,7 +150,7 @@ export default function BookingPage() {
 
                         navigate('/success', {
                             state: {
-                                booking: { ...booking, room_types: room }, // Pass room data for display
+                                booking: { ...booking, room_types: room }, 
                                 pdfUrl: midtransPdf
                             }
                         });
@@ -154,7 +176,6 @@ export default function BookingPage() {
 
     if (!room) return null;
 
-    // Durasi malam untuk display
     const nightsCount = Math.max(1, Math.ceil((new Date(formData.checkOut).getTime() - new Date(formData.checkIn).getTime()) / (1000 * 3600 * 24)));
 
     return (
@@ -231,12 +252,33 @@ export default function BookingPage() {
                                     <img src={room.image_url} className="w-20 h-20 md:w-24 md:h-24 rounded-lg object-cover" alt="Room" />
                                     <div>
                                         <h3 className="font-bold text-gray-800 mb-1">{room.name}</h3>
-                                        <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-2">
-                                            <span className="flex items-center gap-1"><User size={12} /> Max {room.capacity} Tamu</span>
-                                            <span className="flex items-center gap-1"><Wifi size={12} /> Wifi</span>
-                                            <span className="flex items-center gap-1"><Coffee size={12} /> Breakfast</span>
+                                        
+                                        {/* >>> LOGIKA RENDER FASILITAS DINAMIS YANG BISA DI KLIK <<< */}
+                                        <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-2 items-center">
+                                            <span className="flex items-center gap-1 bg-white border border-gray-200 px-2 py-1 rounded">
+                                                <User size={12} /> Max {room.capacity} Tamu
+                                            </span>
+                                            
+                                            {(showAllFacilities ? safeFacilities : displayFacilities).map((fac, idx) => (
+                                                <span key={idx} className="flex items-center gap-1 bg-white border border-gray-200 px-2 py-1 rounded">
+                                                    {getFacilityIcon(fac)} <span className="line-clamp-1">{fac}</span>
+                                                </span>
+                                            ))}
+                                            
+                                            {/* Tombol Toggle +X Lainnya */}
+                                            {safeFacilities.length > 3 && (
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => setShowAllFacilities(!showAllFacilities)}
+                                                    className="text-keenan-gold font-bold hover:text-yellow-600 transition-colors ml-1 px-1 underline"
+                                                >
+                                                    {showAllFacilities ? "Sembunyikan" : `+${safeFacilities.length - 3} lainnya`}
+                                                </button>
+                                            )}
                                         </div>
-                                        <div className="text-xs text-green-600 font-medium flex items-center gap-1"><CheckCircle size={12} /> Bebas Reschedule</div>
+                                        {/* >>> LOGIKA RENDER FASILITAS DINAMIS SELESAI <<< */}
+
+                                        <div className="text-xs text-green-600 font-medium flex items-center gap-1 mt-1"><CheckCircle size={12} /> Bebas Reschedule</div>
                                     </div>
                                 </div>
 
@@ -275,8 +317,7 @@ export default function BookingPage() {
                             <div className="p-5 space-y-3">
                                 <div className="flex justify-between text-sm text-gray-600">
                                     <span>Harga Paket</span>
-                                    {/* Tampilkan harga dasar (daily/weekly/monthly) */}
-                                    <span className="font-medium">{formatRupiah(displayTotalPrice() / nightsCount)}</span>
+                                    <span className="font-medium">{formatRupiah(displayTotalPrice() / (durationType === 'monthly' ? 1 : nightsCount))}</span>
                                 </div>
                                 <div className="flex justify-between text-sm text-gray-600">
                                     <span>Pajak & Biaya</span>
