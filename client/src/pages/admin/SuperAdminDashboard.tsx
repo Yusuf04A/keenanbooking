@@ -337,18 +337,20 @@ export default function SuperAdminDashboard() {
         try {
             const res = await api.post('/midtrans/create-transaction', {
                 property_id: selectedRoom.property_id, room_type_id: newBooking.room_type_id,
-                customer_name: newBooking.customer_name, customer_email: newBooking.customer_email || 'manual@admin.com',
+                customer_name: newBooking.customer_name, customer_email: newBooking.customer_email || '-',
                 customer_phone: newBooking.customer_phone || '-', check_in_date: newBooking.check_in_date,
                 check_out_date: newBooking.check_out_date, total_price: newBooking.total_price,
                 customer_notes: newBooking.notes, booking_source: newBooking.booking_source,
             });
             const bookingData = res.data.booking;
             await api.put(`/admin/bookings/${bookingData.id}/status`, { status: 'paid' });
-            await sendWhatsAppInvoice(
-                newBooking.customer_phone, newBooking.customer_name, bookingData.booking_code,
-                selectedRoom.property?.name || 'Keenan Living', selectedRoom.name,
-                newBooking.check_in_date, newBooking.check_out_date, newBooking.total_price, ""
-            );
+            if (newBooking.customer_phone && newBooking.customer_phone !== '-') {
+                await sendWhatsAppInvoice(
+                    newBooking.customer_phone, newBooking.customer_name, bookingData.booking_code,
+                    selectedRoom.property?.name || 'Keenan Living', selectedRoom.name,
+                    newBooking.check_in_date, newBooking.check_out_date, newBooking.total_price, ""
+                );
+            }
             alert("✅ Manual Booking Berhasil & Notifikasi Terkirim!");
             closeModal();
             fetchAllData();
@@ -834,8 +836,8 @@ export default function SuperAdminDashboard() {
                                         ))}
                                     </div>
                                 </div>
-                                <div><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 block">WhatsApp</label><input required type="text" className="w-full border border-gray-200 rounded-lg p-3 outline-none focus:border-blue-500" value={newBooking.customer_phone} onChange={e => setNewBooking({ ...newBooking, customer_phone: e.target.value })} /></div>
-                                <div><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 block">Email</label><input required type="email" className="w-full border border-gray-200 rounded-lg p-3 outline-none focus:border-blue-500" value={newBooking.customer_email} onChange={e => setNewBooking({ ...newBooking, customer_email: e.target.value })} /></div>
+                                <div><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 block">WhatsApp (Opsional)</label><input type="text" className="w-full border border-gray-200 rounded-lg p-3 outline-none focus:border-blue-500" value={newBooking.customer_phone} onChange={e => setNewBooking({ ...newBooking, customer_phone: e.target.value })} /></div>
+                                <div><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 block">Email (Opsional)</label><input type="email" className="w-full border border-gray-200 rounded-lg p-3 outline-none focus:border-blue-500" value={newBooking.customer_email} onChange={e => setNewBooking({ ...newBooking, customer_email: e.target.value })} /></div>
                                 <div className="md:col-span-2 border-t border-gray-100 pt-4 mt-2"></div>
                                 <div><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 block">Select Room</label><select required className="w-full border border-gray-200 rounded-lg p-3 outline-none focus:border-blue-500 bg-white text-sm" value={newBooking.room_type_id} onChange={e => handleRoomChange(e.target.value)}><option value="">-- Choose Room --</option>{rooms.map(r => (<option key={r.id} value={r.id}>{r.property?.name} - {r.name}</option>))}</select></div>
                                 <div><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 block">Total Price</label><input required type="number" className="w-full border border-gray-200 rounded-lg p-3 outline-none focus:border-blue-500 font-bold" value={newBooking.total_price} onChange={e => setNewBooking({ ...newBooking, total_price: parseInt(e.target.value) })} /></div>

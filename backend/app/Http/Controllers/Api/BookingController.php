@@ -31,8 +31,8 @@ class BookingController extends Controller
             'property_id' => 'required',
             'room_type_id' => 'required',
             'customer_name' => 'required',
-            'customer_email' => 'required|email',
-            'customer_phone' => 'required',
+            'customer_email' => 'required|string', // Removed strict "email" rule to allow '-'
+            'customer_phone' => 'required|string',
             'check_in_date' => 'required|date',
             'check_out_date' => 'required|date',
             'total_price' => 'required|numeric',
