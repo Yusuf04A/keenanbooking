@@ -34,12 +34,8 @@ export default function AdminLogin() {
             localStorage.setItem('keenan_admin_role', data.user.role);
             localStorage.setItem('keenan_admin_scope', data.user.scope);
 
-            // 3. Redirect sesuai Role
-            if (data.user.role === 'superadmin') {
-                navigate('/admin/super-dashboard'); // Redirect ke Dashboard Dewa
-            } else {
-                navigate('/admin/dashboard'); // Redirect ke Dashboard Karyawan
-            }
+            // 3. Redirect to unified dashboard
+            navigate('/admin/dashboard');
 
         } catch (err: any) {
             console.error("Login Error:", err);

@@ -82,7 +82,8 @@ export default function SuperAdminDashboard() {
     const [searchTerm, setSearchTerm] = useState('');
 
     // User State
-    const [adminName, setAdminName] = useState('Super Admin');
+    const [adminName, setAdminName] = useState('Staff');
+    const [adminRole, setAdminRole] = useState('admin');
 
     // Data States
     const [rawBookings, setRawBookings] = useState<any[]>([]);
@@ -124,11 +125,12 @@ export default function SuperAdminDashboard() {
     useEffect(() => {
         const checkUserRole = () => {
             const role = localStorage.getItem('keenan_admin_role');
-            const name = localStorage.getItem('keenan_admin_name') || 'Super Admin';
-            if (role !== 'superadmin') {
-                navigate('/admin/dashboard', { replace: true });
+            const name = localStorage.getItem('keenan_admin_name') || 'Staff';
+            if (!role) {
+                navigate('/admin/login', { replace: true });
             } else {
                 setAdminName(name);
+                setAdminRole(role);
                 fetchAllData();
             }
         };
@@ -476,7 +478,7 @@ export default function SuperAdminDashboard() {
             <div className="w-64 bg-keenan-dark border-r border-gray-100 p-6 hidden md:flex flex-col fixed h-full z-10 print:hidden">
                 <div className="mb-10 text-center">
                     <div className="w-16 h-16 bg-keenan-gold rounded-full flex items-center justify-center mx-auto mb-3 text-keenan-dark"><ShieldCheck size={32} /></div>
-                    <h2 className="text-xl font-black text-white tracking-tight">SuperAdmin</h2>
+                    <h2 className="text-xl font-black text-white tracking-tight">{adminRole === 'superadmin' ? 'Owner' : 'Admin'}</h2>
                     <p className="text-[10px] tracking-[0.2em] uppercase text-gray-400 font-bold">Workspace</p>
                 </div>
                 <nav className="space-y-1">

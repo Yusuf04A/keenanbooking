@@ -3,7 +3,6 @@ import BookingSearch from './pages/booking/BookingSearch';
 import PropertyDetails from './pages/booking/PropertyDetails';
 import BookingPage from './pages/booking/BookingPage';
 import AdminLogin from './pages/admin/Login';
-import AdminDashboard from './pages/admin/Dashboard';
 import CalendarPage from './pages/admin/CalenderPage';
 import InvoicePage from './pages/admin/Invoice';
 import SuperAdminDashboard from './pages/admin/SuperAdminDashboard';
@@ -43,7 +42,7 @@ function App() {
           path="/admin/dashboard"
           element={
             <ProtectedRoute>
-              <AdminDashboard />
+              <SuperAdminDashboard />
             </ProtectedRoute>
           }
         />
@@ -53,15 +52,6 @@ function App() {
           element={
             <ProtectedRoute>
               <CalendarPage />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/admin/super-dashboard"  // <--- Ganti nama path biar keren
-          element={
-            <ProtectedRoute>
-              <SuperAdminDashboard />
             </ProtectedRoute>
           }
         />
