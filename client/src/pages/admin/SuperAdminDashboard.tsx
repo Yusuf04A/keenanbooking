@@ -291,6 +291,7 @@ export default function SuperAdminDashboard() {
                     customer_name: booking.customer_name,
                     customer_email: booking.customer_email,
                     customer_phone: booking.customer_phone,
+                    customer_notes: booking.customer_notes,
                     booking_code: booking.booking_code,
                     total_price: booking.total_price,
                     booking_source: booking.booking_source,
@@ -769,6 +770,25 @@ export default function SuperAdminDashboard() {
                                 slotMinWidth={35} 
                                 locale="id" 
                                 headerToolbar={{ left: 'prev,next today', center: 'title', right: 'resourceTimelineMonth,resourceTimelineWeek' }}
+                                eventClick={(info) => {
+                                    const eventProps = info.event.extendedProps;
+                                    const bookingData = {
+                                        id: info.event.id,
+                                        booking_code: eventProps.booking_code,
+                                        customer_name: eventProps.customer_name,
+                                        customer_email: eventProps.customer_email,
+                                        customer_phone: eventProps.customer_phone,
+                                        check_in_date: info.event.startStr,
+                                        check_out_date: info.event.endStr,
+                                        total_price: eventProps.total_price,
+                                        status: eventProps.status,
+                                        booking_source: eventProps.booking_source,
+                                        customer_notes: eventProps.customer_notes,
+                                        property: { name: eventProps.property_name },
+                                        room_type: { name: eventProps.room_type_name }
+                                    };
+                                    openModal('booking_detail', bookingData);
+                                }}
                                 views={{ 
                                     resourceTimelineMonth: { 
                                         buttonText: 'Bulan',
@@ -926,6 +946,14 @@ export default function SuperAdminDashboard() {
                                                 <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-sm"><div className="bg-blue-100 p-2 rounded-lg text-blue-600"><Mail size={14} /></div><p className="text-sm font-semibold text-gray-700 truncate">{formData.customer_email || '-'}</p></div>
                                             </div>
                                         </div>
+                                        {formData.customer_notes && (
+                                            <div>
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Notes</label>
+                                                <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                                                    <p className="text-sm text-gray-700 italic">"{formData.customer_notes}"</p>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="w-full md:w-[65%] p-8 overflow-y-auto flex flex-col print:w-full print:p-0 print:overflow-visible">
