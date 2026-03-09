@@ -297,6 +297,7 @@ export default function SuperAdminDashboard() {
                     booking_source: booking.booking_source,
                     property_name: booking.property?.name,
                     room_type_name: booking.room_type?.name,
+                    assigned_room_number: assignedPhysicalRoomId.replace(`${booking.room_type_id}-`, '')
                 }
             };
         });
@@ -487,7 +488,7 @@ export default function SuperAdminDashboard() {
                 property_id: selectedRoom.property_id, 
                 room_type_id: newBooking.room_type_id,
                 customer_name: newBooking.customer_name, 
-                customer_email: newBooking.customer_email || 'walkin@keenan.com',
+                customer_email: newBooking.customer_email || '-',
                 customer_phone: newBooking.customer_phone || '-', 
                 check_in_date: newBooking.check_in_date,
                 check_out_date: newBooking.check_out_date, 
@@ -656,6 +657,14 @@ export default function SuperAdminDashboard() {
         const searchLower = searchTerm.toLowerCase();
         const matchesSearch = (b.customer_name?.toLowerCase() || '').includes(searchLower) || (b.booking_code?.toLowerCase() || '').includes(searchLower);
         return matchesProp && matchesStatus && matchesSearch;
+    }).map(b => {
+        if (!b.assigned_room_number) {
+            const calendarEvent = calendarEvents.find((e: any) => e.id === b.id);
+            if (calendarEvent && calendarEvent.extendedProps?.assigned_room_number) {
+                return { ...b, assigned_room_number: calendarEvent.extendedProps.assigned_room_number };
+            }
+        }
+        return b;
     });
 
     if (loading) return <div className="h-screen flex items-center justify-center bg-[#F8FAFC]"><Loader2 className="animate-spin text-keenan-gold" size={40} /></div>;
@@ -803,7 +812,8 @@ export default function SuperAdminDashboard() {
                                         booking_source: eventProps.booking_source,
                                         customer_notes: eventProps.customer_notes,
                                         property: { name: eventProps.property_name },
-                                        room_type: { name: eventProps.room_type_name }
+                                        room_type: { name: eventProps.room_type_name },
+                                        assigned_room_number: eventProps.assigned_room_number
                                     };
                                     openModal('booking_detail', bookingData);
                                 }}
@@ -840,7 +850,7 @@ export default function SuperAdminDashboard() {
                                             <tr key={booking.id} onClick={() => openModal('booking_detail', booking)} className="hover:bg-blue-50/30 transition-colors cursor-pointer">
                                                 <td className="p-4 pl-6"><p className="font-mono text-xs font-semibold text-gray-800">#{booking.booking_code}</p><div className="mt-1">{getSourceBadge(booking.booking_source)}</div></td>
                                                 <td className="p-4"><p className="font-bold text-gray-800 text-xs">{booking.customer_name}</p><p className="text-[10px] text-gray-500">{booking.customer_phone}</p></td>
-                                                <td className="p-4"><p className="font-semibold text-gray-800 text-xs">{booking.property?.name}</p><p className="text-[10px] text-gray-500">{booking.room_type?.name}</p></td>
+                                                <td className="p-4"><p className="font-semibold text-gray-800 text-xs">{booking.property?.name}</p><p className="text-[10px] text-gray-500">{booking.room_type?.name} <span className="font-bold text-gray-800">({booking.assigned_room_number ? `Room ${booking.assigned_room_number}` : 'Belum Di-assign'})</span></p></td>
                                                 <td className="p-4 text-gray-500 text-[10px] font-medium">{new Date(booking.check_in_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} → {new Date(booking.check_out_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</td>
                                                 <td className="p-4">{getStatusBadge(booking.status)}</td>
                                                 <td className="p-4 pr-6 text-right font-bold text-gray-800 text-xs">{formatRupiah(booking.total_price)}</td>
@@ -977,9 +987,12 @@ export default function SuperAdminDashboard() {
                                 <div className="w-full md:w-[65%] p-8 overflow-y-auto flex flex-col print:w-full print:p-0 print:overflow-visible">
                                     <div className="flex justify-between items-start mb-8 pb-6 border-b border-gray-100">
                                         <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em]">Booking ID</p><h2 className="text-2xl font-mono font-bold text-gray-900">#{formData.booking_code}</h2></div>
+                                        <button onClick={() => window.print()} className="bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-xl font-bold flex items-center gap-2 text-xs transition-all shadow-sm print:hidden">
+                                            <Printer size={16} /> Print Data
+                                        </button>
                                     </div>
                                     <div className="grid grid-cols-2 gap-8 mb-8">
-                                        <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Room</label><div className="flex gap-3"><MapPin size={20} className="text-blue-600" /><div><p className="font-bold text-gray-900 text-lg">{formData.property?.name}</p><p className="text-sm text-gray-500">{formData.room_type?.name}</p></div></div></div>
+                                        <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Room</label><div className="flex gap-3"><MapPin size={20} className="text-blue-600" /><div><p className="font-bold text-gray-900 text-lg">{formData.property?.name}</p><p className="text-sm text-gray-500">{formData.room_type?.name} <span className="font-bold text-gray-800">({(!formData.assigned_room_number || formData.assigned_room_number === 'fallback') ? 'Belum Di-assign' : `Room ${formData.assigned_room_number}`})</span></p></div></div></div>
                                         <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Status</label><div>{getStatusBadge(formData.status)}</div></div>
                                     </div>
                                     
