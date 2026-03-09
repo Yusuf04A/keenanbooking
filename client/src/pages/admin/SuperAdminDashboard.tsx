@@ -344,7 +344,7 @@ export default function SuperAdminDashboard() {
 
     const getMonthLabels = () => {
         const labels = []; const d = new Date();
-        for (let i = 5; i >= 0; i--) { const pastD = new Date(d.getFullYear(), d.getMonth() - i, 1); labels.push(pastD.toLocaleDateString('en-US', { month: 'short' })); }
+        for (let i = 5; i >= 0; i--) { const pastD = new Date(d.getFullYear(), d.getMonth() - i, 1); labels.push(pastD.toLocaleDateString('id-ID', { month: 'short' })); }
         return labels;
     }
 
@@ -851,7 +851,7 @@ export default function SuperAdminDashboard() {
                                                 <td className="p-4 pl-6"><p className="font-mono text-xs font-semibold text-gray-800">#{booking.booking_code}</p><div className="mt-1">{getSourceBadge(booking.booking_source)}</div></td>
                                                 <td className="p-4"><p className="font-bold text-gray-800 text-xs">{booking.customer_name}</p><p className="text-[10px] text-gray-500">{booking.customer_phone}</p></td>
                                                 <td className="p-4"><p className="font-semibold text-gray-800 text-xs">{booking.property?.name}</p><p className="text-[10px] text-gray-500">{booking.room_type?.name} <span className="font-bold text-gray-800">({booking.assigned_room_number ? `Room ${booking.assigned_room_number}` : 'Belum Di-assign'})</span></p></td>
-                                                <td className="p-4 text-gray-500 text-[10px] font-medium">{new Date(booking.check_in_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} → {new Date(booking.check_out_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</td>
+                                                <td className="p-4 text-gray-500 text-[10px] font-medium">{new Date(booking.check_in_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} → {new Date(booking.check_out_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                                                 <td className="p-4">{getStatusBadge(booking.status)}</td>
                                                 <td className="p-4 pr-6 text-right font-bold text-gray-800 text-xs">{formatRupiah(booking.total_price)}</td>
                                             </tr>
@@ -892,8 +892,8 @@ export default function SuperAdminDashboard() {
                                 <div key={prop.id} className="mb-8">
                                     <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-2"><Hotel size={16} /> {prop.name}</h3>
                                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                                        <table className="w-full text-left text-sm">
-                                            <thead className="bg-gray-50 text-gray-400 uppercase text-[9px] tracking-widest font-bold"><tr><th className="p-4 pl-6">Room Name</th><th className="p-4">Type</th><th className="p-4">Stock</th><th className="p-4">Price (Daily/Monthly)</th><th className="p-4 text-right pr-6">Actions</th></tr></thead>
+                                        <table className="w-full text-left text-sm table-fixed">
+                                            <thead className="bg-gray-50 text-gray-400 uppercase text-[9px] tracking-widest font-bold"><tr><th className="p-4 pl-6 w-1/4">Room Name</th><th className="p-4 w-1/6">Type</th><th className="p-4 w-1/6">Stock</th><th className="p-4 w-1/4">Price (Daily/Monthly)</th><th className="p-4 text-right pr-6 w-1/6">Actions</th></tr></thead>
                                             <tbody className="divide-y divide-gray-50">
                                                 {hotelRooms.map(room => (
                                                     <tr key={room.id} className="hover:bg-gray-50">
@@ -998,9 +998,9 @@ export default function SuperAdminDashboard() {
                                     
                                     <div className="bg-gray-50 rounded-2xl p-6 mb-8 border border-gray-100">
                                         <div className="flex items-center justify-between mb-4">
-                                            <div><p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Check-In</p><p className="font-bold text-sm text-gray-900 mt-1">{new Date(formData.check_in_date).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
+                                            <div><p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Check-In</p><p className="font-bold text-sm text-gray-900 mt-1">{new Date(formData.check_in_date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
                                             <div className="text-gray-300">➜</div>
-                                            <div className="text-right"><p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Check-Out</p><p className="font-bold text-sm text-gray-900 mt-1">{new Date(formData.check_out_date).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
+                                            <div className="text-right"><p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Check-Out</p><p className="font-bold text-sm text-gray-900 mt-1">{new Date(formData.check_out_date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
                                         </div>
                                         <div className="border-t border-gray-200 pt-4 flex justify-between items-center"><div className="flex items-center gap-2 text-sm font-semibold text-gray-500"><CreditCard size={16} /> Total Paid</div><div className="text-2xl font-black text-gray-900">{formatRupiah(formData.total_price)}</div></div>
                                     </div>
