@@ -12,7 +12,7 @@ import {
     LayoutDashboard, LogOut as LogOutIcon, Hotel, BedDouble, Users, BookOpen,
     Plus, Trash2, Edit, X, Loader2, ShieldCheck, UploadCloud,
     Filter, Globe, Calendar, CheckCircle, Mail, Phone, MapPin, Printer, CreditCard,
-    Layers, User, MessageSquare, AlertCircle, Search, LogIn, Clock, XCircle, Smartphone
+    Layers, User, MessageSquare, AlertCircle, Search, LogIn, Clock, XCircle, Smartphone, ChevronDown
 } from 'lucide-react';
 
 const DonutChart = ({ data }: { data: { label: string, value: number, color: string }[] }) => {
@@ -590,6 +590,17 @@ export default function SuperAdminDashboard() {
         } catch (error) { alert("Gagal menghapus data."); }
     }
 
+    const handleStatusChange = async (bookingId: string, newStatus: string) => {
+        if (!confirm(`Ubah status booking menjadi: ${newStatus.toUpperCase()}?`)) return;
+        try {
+            await api.put(`/admin/bookings/${bookingId}/status`, { status: newStatus });
+            setFormData((prev: any) => ({ ...prev, status: newStatus }));
+            fetchAllData();
+        } catch (error) {
+            alert("Gagal update status booking.");
+        }
+    };
+
     const openModal = (type: any, data: any = null) => {
         setModalType(type); 
         setEditingId(data ? data.id : null);
@@ -987,9 +998,6 @@ export default function SuperAdminDashboard() {
                                 <div className="w-full md:w-[65%] p-8 overflow-y-auto flex flex-col print:w-full print:p-0 print:overflow-visible">
                                     <div className="flex justify-between items-start mb-8 pb-6 border-b border-gray-100">
                                         <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em]">Booking ID</p><h2 className="text-2xl font-mono font-bold text-gray-900">#{formData.booking_code}</h2></div>
-                                        <button onClick={() => window.print()} className="bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-xl font-bold flex items-center gap-2 text-xs transition-all shadow-sm print:hidden">
-                                            <Printer size={16} /> Print Data
-                                        </button>
                                     </div>
                                     <div className="grid grid-cols-2 gap-8 mb-8">
                                         <div><label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block">Room</label><div className="flex gap-3"><MapPin size={20} className="text-blue-600" /><div><p className="font-bold text-gray-900 text-lg">{formData.property?.name}</p><p className="text-sm text-gray-500">{formData.room_type?.name} <span className="font-bold text-gray-800">({(!formData.assigned_room_number || formData.assigned_room_number === 'fallback') ? 'Belum Di-assign' : `Room ${formData.assigned_room_number}`})</span></p></div></div></div>
@@ -1004,6 +1012,29 @@ export default function SuperAdminDashboard() {
                                         </div>
                                         <div className="border-t border-gray-200 pt-4 flex justify-between items-center"><div className="flex items-center gap-2 text-sm font-semibold text-gray-500"><CreditCard size={16} /> Total Paid</div><div className="text-2xl font-black text-gray-900">{formatRupiah(formData.total_price)}</div></div>
                                     </div>
+
+                                    <div className="flex flex-wrap items-center justify-end gap-3 mt-auto pt-6 border-t border-gray-100 print:hidden">
+                                        <div className="relative">
+                                            <select 
+                                                className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-3 rounded-xl font-bold text-xs appearance-none cursor-pointer outline-none shadow-sm pr-10"
+                                                value={formData.status}
+                                                onChange={(e) => handleStatusChange(formData.id, e.target.value)}
+                                            >
+                                                <option value="pending" disabled>Ubah Status: PENDING</option>
+                                                <option value="paid">Ubah ke LUNAS (Paid)</option>
+                                                <option value="checked_in">Ubah ke CHECK-IN</option>
+                                                <option value="checked_out">Ubah ke CHECK-OUT</option>
+                                                <option value="cancelled">Ubah ke CANCEL</option>
+                                            </select>
+                                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                                                <ChevronDown size={14} />
+                                            </div>
+                                        </div>
+                                        <button onClick={() => window.print()} className="bg-gray-900 hover:bg-black text-white px-5 py-3 rounded-xl font-bold flex items-center gap-2 text-xs transition-all shadow-sm">
+                                            <Printer size={16} /> Print Data
+                                        </button>
+                                    </div>
+
                                 </div>
                             </>
                         )}
