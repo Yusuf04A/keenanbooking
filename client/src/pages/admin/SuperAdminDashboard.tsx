@@ -332,6 +332,15 @@ export default function SuperAdminDashboard() {
     };
 
     const formatRupiah = (price: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(price);
+    
+    // --- UTILITIES FOR NUMBER INPUT FORMATTING ---
+    const formatInputCurrency = (value: any) => {
+        if (!value) return '';
+        const raw = String(value).replace(/\D/g, '');
+        return raw ? new Intl.NumberFormat('id-ID').format(parseInt(raw, 10)) : '';
+    };
+    const parseCurrency = (value: string) => value.replace(/\D/g, '');
+
     const getMonthLabels = () => {
         const labels = []; const d = new Date();
         for (let i = 5; i >= 0; i--) { const pastD = new Date(d.getFullYear(), d.getMonth() - i, 1); labels.push(pastD.toLocaleDateString('en-US', { month: 'short' })); }
@@ -411,7 +420,7 @@ export default function SuperAdminDashboard() {
         
         if (selectedRoom) {
             const isMonthly = selectedRoom.rental_category === 'bulanan' || selectedRoom.room_category === 'monthly';
-            let price = isMonthly ? Number(selectedRoom.price_monthly) : (Number(selectedRoom.price_daily) || Number(selectedRoom.base_price));
+            let price = isMonthly ? Math.floor(Number(selectedRoom.price_monthly)) : (Math.floor(Number(selectedRoom.price_daily)) || Math.floor(Number(selectedRoom.base_price)));
             
             let checkOutDate = newBooking.check_out_date;
             
@@ -604,7 +613,16 @@ export default function SuperAdminDashboard() {
         }
         if (!Array.isArray(safeFacilities)) safeFacilities = [];
 
-        setFormData(data ? { ...data, image_file: null, preview_url: null, room_numbers_input: roomNumbersStr, rental_category: data?.rental_category || 'harian' } : { rental_category: 'harian' });
+        setFormData(data ? { 
+            ...data, 
+            image_file: null, 
+            preview_url: null, 
+            room_numbers_input: roomNumbersStr, 
+            rental_category: data?.rental_category || 'harian',
+            price_daily: data?.price_daily ? String(Math.floor(Number(data.price_daily))) : '',
+            price_weekly: data?.price_weekly ? String(Math.floor(Number(data.price_weekly))) : '',
+            price_monthly: data?.price_monthly ? String(Math.floor(Number(data.price_monthly))) : ''
+        } : { rental_category: 'harian' });
         setSelectedFacilities(safeFacilities);
         setGalleryFiles([]); setGalleryPreviews([]); setRemovedGalleryIndices([]);
 
@@ -1011,7 +1029,7 @@ export default function SuperAdminDashboard() {
                                     </select>
                                 </div>
 
-                                <div><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 block">Total Price</label><input required type="number" className="w-full border border-gray-200 rounded-lg p-3 outline-none focus:border-blue-500 font-bold" value={newBooking.total_price} onChange={e => setNewBooking({ ...newBooking, total_price: parseInt(e.target.value) })} /></div>
+                                <div><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 block">Total Price</label><input required type="text" className="w-full border border-gray-200 rounded-lg p-3 outline-none focus:border-blue-500 font-bold" value={formatInputCurrency(newBooking.total_price)} onChange={e => setNewBooking({ ...newBooking, total_price: parseInt(parseCurrency(e.target.value) || '0', 10) })} /></div>
                                 <div><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 block">Check-In</label><input required type="date" className="w-full border border-gray-200 rounded-lg p-3 outline-none focus:border-blue-500" value={newBooking.check_in_date} onChange={e => handleCheckInChange(e.target.value)} /></div>
                                 <div><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 block">Check-Out</label><input required type="date" className="w-full border border-gray-200 rounded-lg p-3 outline-none focus:border-blue-500" value={newBooking.check_out_date} onChange={e => setNewBooking({ ...newBooking, check_out_date: e.target.value })} /></div>
                                 <div className="md:col-span-2"><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 block">Notes</label><textarea className="w-full border border-gray-200 rounded-lg p-3 outline-none focus:border-blue-500 text-sm" rows={2} value={newBooking.notes} onChange={e => setNewBooking({ ...newBooking, notes: e.target.value })}></textarea></div>
@@ -1067,12 +1085,12 @@ export default function SuperAdminDashboard() {
                                         {formData.rental_category === 'bulanan' ? (
                                             <div>
                                                 <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1 block">Harga Bulanan</label>
-                                                <input type="number" placeholder="Contoh: 3500000" value={formData.price_monthly || ''} className="w-full p-3 border rounded-xl bg-blue-50 focus:border-blue-500 outline-none" onChange={e => setFormData({ ...formData, price_monthly: e.target.value, price_daily: '', price_weekly: '' })} />
+                                                <input type="text" placeholder="Contoh: 3.500.000" value={formatInputCurrency(formData.price_monthly)} className="w-full p-3 border rounded-xl bg-blue-50 focus:border-blue-500 outline-none" onChange={e => setFormData({ ...formData, price_monthly: parseCurrency(e.target.value), price_daily: '', price_weekly: '' })} />
                                             </div>
                                         ) : (
                                             <div>
                                                 <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1 block">Harga Harian</label>
-                                                <input type="number" placeholder="Contoh: 250000" value={formData.price_daily || ''} className="w-full p-3 border rounded-xl bg-blue-50 focus:border-blue-500 outline-none" onChange={e => setFormData({ ...formData, price_daily: e.target.value, price_monthly: '', price_weekly: '' })} />
+                                                <input type="text" placeholder="Contoh: 250.000" value={formatInputCurrency(formData.price_daily)} className="w-full p-3 border rounded-xl bg-blue-50 focus:border-blue-500 outline-none" onChange={e => setFormData({ ...formData, price_daily: parseCurrency(e.target.value), price_monthly: '', price_weekly: '' })} />
                                             </div>
                                         )}
 
@@ -1117,9 +1135,9 @@ export default function SuperAdminDashboard() {
                     border-radius: 2px !important; 
                     font-size: 0.75rem; 
                     padding: 4px 6px; 
-                    margin: 1px 0 !important; 
+                    margin: 0 !important; 
                     border: none !important;
-                    height: 90% !important; 
+                    height: 100% !important; 
                     cursor: pointer; 
                 }
                 .fc-resource-group { background-color: #f8fafc; font-weight: 900; text-transform: uppercase; color: #C5A059; letter-spacing: 1px; font-size: 0.75rem; }
