@@ -310,8 +310,7 @@ const PropertyDetails = () => {
                             const currentStock = isCheckingStock ? 0 : (realTimeStock[room.id] ?? room.total_stock);
                             const isSoldOut = !isCheckingStock && currentStock === 0;
                             const isMonthly = room.rental_category === 'bulanan';
-
-                            const calculatedMonths = Math.max(1, Math.ceil(totalNights / 30));
+                            const calculatedMonths = Math.max(1, Math.round(totalNights / 30));
                             const calculatedPrice = isMonthly
                                 ? (Number(room.price_monthly) || 0) * calculatedMonths
                                 : (Number(room.price_daily) || Number(room.base_price) || 0) * totalNights;
