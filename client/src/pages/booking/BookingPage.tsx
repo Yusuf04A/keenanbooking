@@ -5,7 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
     Loader2, User, AlertCircle, CheckCircle,
     Wifi, Coffee, Home, Wind, Tv, MonitorPlay, Car, Utensils, Droplets,
-    ArrowLeft, Mail, Phone, ChevronRight, CreditCard
+    ArrowLeft, Mail, Phone, CreditCard
 } from 'lucide-react';
 
 export default function BookingPage() {
@@ -27,7 +27,7 @@ export default function BookingPage() {
 
     // 2. State Management
     const [loading, setLoading] = useState(false);
-    const [showAllFacilities, setShowAllFacilities] = useState(false); // State baru untuk toggle fasilitas
+    const [showAllFacilities, setShowAllFacilities] = useState(false);
     const [agreedToTerms, setAgreedToTerms] = useState(false);
 
     const [formData, setFormData] = useState({
@@ -191,13 +191,7 @@ export default function BookingPage() {
                         </button>
                         <h1 className="text-lg font-bold text-gray-800">Booking Confirmation</h1>
                     </div>
-                    <div className="hidden md:flex items-center gap-2 text-xs font-medium">
-                        <span className="text-gray-400">1. Cari</span>
-                        <ChevronRight size={12} className="text-gray-300" />
-                        <span className="text-keenan-gold font-bold">2. Booking</span>
-                        <ChevronRight size={12} className="text-gray-300" />
-                        <span className="text-gray-400">3. Selesai</span>
-                    </div>
+                    {/* Bagian Indikator 1.Cari > 2.Booking > 3.Selesai Dihapus Sesuai Request */}
                 </div>
             </div>
 
@@ -277,7 +271,6 @@ export default function BookingPage() {
                                                 </button>
                                             )}
                                         </div>
-                                        {/* >>> LOGIKA RENDER FASILITAS DINAMIS SELESAI <<< */}
 
                                         <div className="text-xs text-green-600 font-medium flex items-center gap-1 mt-1"><CheckCircle size={12} /> Bebas Reschedule</div>
                                     </div>
@@ -324,28 +317,49 @@ export default function BookingPage() {
                                     <span>Pajak & Biaya</span>
                                     <span className="font-medium text-green-600">Termasuk</span>
                                 </div>
-                                <div className="border-t border-dashed border-gray-200 my-2 pt-3">
+                                <div className="border-t border-dashed border-gray-200 my-2 pt-3 mb-2">
                                     <div className="flex justify-between items-center mb-1"><span className="font-bold text-gray-800 text-lg">Total Pembayaran</span></div>
                                     <div className="text-right"><span className="font-black text-2xl text-keenan-gold">{formatRupiah(displayTotalPrice())}</span></div>
                                 </div>
                             </div>
-                            <div className="p-4 bg-gray-50">
-                                <label className="flex items-start gap-2 mb-4 cursor-pointer text-sm text-gray-700">
-                                    <input 
-                                        type="checkbox" 
-                                        className="mt-1 w-4 h-4 accent-keenan-gold cursor-pointer"
-                                        checked={agreedToTerms}
-                                        onChange={(e) => setAgreedToTerms(e.target.checked)}
-                                    />
-                                    <span>
-                                        Saya setuju bahwa DP atau pembayaran yang sudah masuk <strong className="font-bold text-red-600">tidak bisa direfund</strong>.
-                                    </span>
-                                </label>
+                            
+                            <div className="p-4 bg-gray-50 border-t border-gray-100">
+                                {/* --- NEW CLEAN TERMS & CONDITIONS BOX (DYNAMIC COLOR) --- */}
+                                <div className={`border rounded-lg p-4 mb-5 transition-colors duration-300 ${agreedToTerms ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                                    <div className="flex items-start gap-3">
+                                        {agreedToTerms ? (
+                                            <CheckCircle size={18} className="text-green-600 mt-0.5 shrink-0 transition-colors duration-300" />
+                                        ) : (
+                                            <AlertCircle size={18} className="text-red-600 mt-0.5 shrink-0 transition-colors duration-300" />
+                                        )}
+                                        <div>
+                                            <h4 className={`text-sm font-bold mb-1 transition-colors duration-300 ${agreedToTerms ? 'text-green-800' : 'text-red-800'}`}>
+                                                Kebijakan Pembatalan
+                                            </h4>
+                                            <p className={`text-xs leading-relaxed mb-3 transition-colors duration-300 ${agreedToTerms ? 'text-green-700' : 'text-red-700'}`}>
+                                                Uang muka (DP) atau pembayaran penuh yang sudah masuk <strong>bersifat Non-Refundable (tidak dapat dikembalikan)</strong> dengan alasan apapun.
+                                            </p>
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input 
+                                                    type="checkbox" 
+                                                    className={`w-4 h-4 rounded border-gray-300 focus:ring-2 cursor-pointer transition-colors duration-300 ${agreedToTerms ? 'text-green-600 accent-green-600 focus:ring-green-500' : 'text-red-600 accent-red-600 focus:ring-red-500'}`}
+                                                    checked={agreedToTerms}
+                                                    onChange={(e) => setAgreedToTerms(e.target.checked)}
+                                                />
+                                                <span className={`text-xs font-bold transition-colors duration-300 ${agreedToTerms ? 'text-green-800' : 'text-red-900 group-hover:text-red-700'}`}>
+                                                    Saya mengerti dan menyetujui
+                                                </span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <button onClick={handlePayment} disabled={loading || !agreedToTerms}
-                                    className={`w-full py-4 rounded-lg font-bold text-white shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2 ${loading || !agreedToTerms ? 'bg-gray-400 cursor-not-allowed' : 'bg-keenan-gold hover:bg-yellow-600'}`}>
+                                    className={`w-full py-4 rounded-lg font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2 
+                                        ${loading || !agreedToTerms ? 'bg-gray-300 cursor-not-allowed' : 'bg-keenan-gold hover:bg-yellow-600 transform active:scale-95'}`}>
                                     {loading ? <Loader2 className="animate-spin" /> : "Lanjutkan Pembayaran"}
                                 </button>
-                                <p className="text-[10px] text-gray-400 text-center mt-3">Dengan lanjut, Anda setuju dengan S&K Keenan Living.</p>
+                                <p className="text-[10px] text-gray-400 text-center mt-3">Dengan lanjut, Anda tunduk pada S&K Keenan Living.</p>
                             </div>
                         </div>
                     </div>
