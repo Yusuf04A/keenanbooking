@@ -113,6 +113,7 @@ class BookingController extends Controller
                 'status' => $isManual ? 'pending' : 'pending', // Manual nanti di-update jadi paid di frontend admin
                 'snap_token' => $snapToken,
                 'booking_source' => $request->booking_source ?? 'website',
+                'assigned_room_number' => $request->assigned_room_number,
             ]);
 
             return response()->json([
