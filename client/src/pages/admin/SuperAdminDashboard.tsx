@@ -1020,7 +1020,7 @@ export default function SuperAdminDashboard() {
                                                 value={formData.status}
                                                 onChange={(e) => handleStatusChange(formData.id, e.target.value)}
                                             >
-                                                <option value="pending" disabled>Ubah Status: PENDING</option>
+                                                <option value="pending">Ubah Status: PENDING</option>
                                                 <option value="paid">Ubah ke LUNAS (Paid)</option>
                                                 <option value="checked_in">Ubah ke CHECK-IN</option>
                                                 <option value="checked_out">Ubah ke CHECK-OUT</option>
@@ -1094,6 +1094,13 @@ export default function SuperAdminDashboard() {
                                     <div className="space-y-4 text-sm">
                                         <input placeholder="Hotel Name" value={formData.name || ''} className="w-full p-3 border rounded-xl outline-none focus:border-blue-500" onChange={e => setFormData({ ...formData, name: e.target.value })} />
                                         <input placeholder="Address" value={formData.address || ''} className="w-full p-3 border rounded-xl outline-none focus:border-blue-500" onChange={e => setFormData({ ...formData, address: e.target.value })} />
+                                        
+                                        <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                                            <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2 mb-3"><UploadCloud size={16} className="text-blue-500" /> Upload Property Image</label>
+                                            <input type="file" accept="image/*" onChange={handleFileChange} className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:font-bold file:bg-blue-100 file:text-blue-600 cursor-pointer" />
+                                            {(formData.preview_url || formData.image_url) && (<div className="mt-4 relative w-full h-32 rounded-xl overflow-hidden border border-gray-200"><img src={formData.preview_url || formData.image_url} alt="Preview" className="w-full h-full object-cover" /></div>)}
+                                        </div>
+
                                         <button onClick={handleSave} disabled={uploading} className="w-full bg-gray-900 text-white py-3.5 rounded-xl font-bold flex justify-center hover:bg-black">{uploading ? <Loader2 className="animate-spin" /> : "Save Property"}</button>
                                     </div>
                                 )}

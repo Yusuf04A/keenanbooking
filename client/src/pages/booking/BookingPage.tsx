@@ -28,6 +28,7 @@ export default function BookingPage() {
     // 2. State Management
     const [loading, setLoading] = useState(false);
     const [showAllFacilities, setShowAllFacilities] = useState(false); // State baru untuk toggle fasilitas
+    const [agreedToTerms, setAgreedToTerms] = useState(false);
 
     const [formData, setFormData] = useState({
         name: '', email: '', phone: '',
@@ -329,8 +330,19 @@ export default function BookingPage() {
                                 </div>
                             </div>
                             <div className="p-4 bg-gray-50">
-                                <button onClick={handlePayment} disabled={loading}
-                                    className="w-full py-4 rounded-lg font-bold text-white shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2 bg-keenan-gold hover:bg-yellow-600">
+                                <label className="flex items-start gap-2 mb-4 cursor-pointer text-sm text-gray-700">
+                                    <input 
+                                        type="checkbox" 
+                                        className="mt-1 w-4 h-4 accent-keenan-gold cursor-pointer"
+                                        checked={agreedToTerms}
+                                        onChange={(e) => setAgreedToTerms(e.target.checked)}
+                                    />
+                                    <span>
+                                        Saya setuju bahwa DP atau pembayaran yang sudah masuk <strong className="font-bold text-red-600">tidak bisa direfund</strong>.
+                                    </span>
+                                </label>
+                                <button onClick={handlePayment} disabled={loading || !agreedToTerms}
+                                    className={`w-full py-4 rounded-lg font-bold text-white shadow-lg transition-all transform active:scale-95 flex items-center justify-center gap-2 ${loading || !agreedToTerms ? 'bg-gray-400 cursor-not-allowed' : 'bg-keenan-gold hover:bg-yellow-600'}`}>
                                     {loading ? <Loader2 className="animate-spin" /> : "Lanjutkan Pembayaran"}
                                 </button>
                                 <p className="text-[10px] text-gray-400 text-center mt-3">Dengan lanjut, Anda setuju dengan S&K Keenan Living.</p>
